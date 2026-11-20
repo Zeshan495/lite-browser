@@ -1,0 +1,367 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>LiteBrowser Settings</title>
+<style>
+:root{color-scheme:light dark;--accent:#2563eb;--bg:#f5f5f7;--side:#ececef;--card:#ffffff;--line:rgba(0,0,0,.09);--muted:#6b7280;--danger:#dc2626;--ok:#16a34a}
+@media (prefers-color-scheme:dark){:root{--bg:#1e1e20;--side:#18181a;--card:#2a2a2d;--line:rgba(255,255,255,.1);--muted:#9ca3af}}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;font:13px/1.4 -apple-system,system-ui,sans-serif;background:var(--bg);color:CanvasText;display:flex;-webkit-user-select:none;user-select:none}
+nav{width:200px;flex:none;padding:18px 10px;background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column}
+nav button.back{margin-top:auto;justify-content:center;background:var(--card);border:1px solid var(--line);font-weight:500;padding:9px 10px}
+nav button.back:hover{border-color:var(--accent);color:var(--accent);background:var(--card)}
+nav .hint{text-align:center;color:var(--muted);font-size:11px;margin-top:6px}
+nav .brand{font-weight:600;font-size:14px;padding:0 10px 14px}
+nav button{display:flex;align-items:center;gap:9px;width:100%;text-align:left;padding:8px 10px;margin-bottom:2px;border:0;background:none;border-radius:7px;font:inherit;color:inherit;cursor:pointer}
+nav button:hover{background:var(--line)}
+nav button.active{background:var(--accent);color:#fff}
+nav .ico{width:18px;text-align:center}
+main{flex:1;overflow:auto;padding:24px 30px 40px}
+section{display:none;max-width:760px}
+section.active{display:block}
+h1{font-size:21px;font-weight:600;margin:0 0 4px}
+h2{font-size:13px;font-weight:600;margin:0 0 10px}
+.sub{color:var(--muted);margin:0 0 18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:14px}
+.bar{display:flex;gap:8px;align-items:center;margin-bottom:12px}
+input[type=search],textarea{font:inherit;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:7px;padding:7px 10px;outline:none}
+input[type=search]{flex:1}
+input[type=search]:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.2)}
+textarea{width:100%;min-height:96px;resize:vertical;font-family:ui-monospace,Menlo,monospace;-webkit-user-select:text;user-select:text}
+.btn{font:inherit;padding:6px 14px;border-radius:7px;border:1px solid var(--line);background:var(--card);color:inherit;cursor:pointer;white-space:nowrap}
+.btn:hover{filter:brightness(.97)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.danger{background:var(--danger);border-color:var(--danger);color:#fff}
+.btn.ghost-danger{color:var(--danger)}
+.btn:disabled{opacity:.5;cursor:default}
+.day{font-weight:600;color:var(--muted);font-size:12px;margin:16px 0 6px;text-transform:uppercase;letter-spacing:.03em}
+.day:first-child{margin-top:0}
+.list{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.item{display:flex;align-items:center;gap:12px;padding:8px 12px;border-bottom:1px solid var(--line);cursor:pointer}
+.item:last-child{border-bottom:0}
+.item:hover{background:rgba(37,99,235,.07)}
+.item .time{color:var(--muted);width:58px;flex:none;font-variant-numeric:tabular-nums}
+.item .main{flex:1;min-width:0}
+.item .title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .host{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .x{border:0;background:none;color:var(--muted);font-size:16px;cursor:pointer;padding:0 4px;border-radius:5px;visibility:hidden}
+.item:hover .x{visibility:visible}
+.item .x:hover{color:var(--danger)}
+.empty{color:var(--muted);text-align:center;padding:40px 0}
+.check{display:flex;align-items:flex-start;gap:10px;padding:7px 0;cursor:pointer}
+.check input{margin-top:2px}
+.check small{display:block;color:var(--muted)}
+.sites{max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:8px}
+.site{display:flex;align-items:center;gap:10px;padding:7px 12px;border-bottom:1px solid var(--line);cursor:pointer}
+.site:last-child{border-bottom:0}
+.site .d{flex:1}
+.tag{font-size:11px;padding:1px 8px;border-radius:99px;background:rgba(22,163,74,.15);color:var(--ok)}
+.tag.out{background:rgba(220,38,38,.12);color:var(--danger)}
+.summary{color:var(--muted);margin-left:auto}
+.presets{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
+.preset{border:1px solid var(--line);border-radius:8px;padding:9px 11px;cursor:pointer;background:var(--card)}
+.preset:hover{border-color:var(--accent)}
+.preset.sel{border-color:var(--accent);box-shadow:0 0 0 2px rgba(37,99,235,.25)}
+.preset b{display:block}
+.preset span{color:var(--muted);font-size:12px}
+.mono{font-family:ui-monospace,Menlo,monospace}
+.results div{padding:3px 0}
+.ok{color:var(--ok)} .bad{color:var(--danger)}
+.note{color:var(--muted);font-size:12px;margin-top:10px}
+.ext{display:flex;gap:14px;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--line)}
+.ext:last-child{border-bottom:0}
+.ext img,.ext .ph{width:40px;height:40px;border-radius:9px;flex:none}
+.ext .ph{display:grid;place-items:center;background:linear-gradient(135deg,#4338ca,#0ea5e9);color:#fff;font-weight:700}
+.ext .info{flex:1;min-width:0}
+.ext .t{font-weight:600}
+.ext .v{color:var(--muted);font-weight:400;font-size:12px;margin-left:6px}
+.ext .d{color:var(--muted);font-size:12px;margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ext .warn{margin-top:6px;font-size:12px;color:#b45309;background:rgba(245,158,11,.12);border-radius:6px;padding:5px 8px}
+.ext .acts{display:flex;gap:6px;align-items:center;flex:none}
+.switch{position:relative;width:36px;height:20px;flex:none}
+.switch input{opacity:0;width:0;height:0}
+.switch span{position:absolute;inset:0;border-radius:20px;background:#9ca3af66;transition:.2s;cursor:pointer}
+.switch span:before{content:"";position:absolute;width:16px;height:16px;left:2px;top:2px;border-radius:50%;background:#fff;transition:.2s;box-shadow:0 1px 2px rgba(0,0,0,.3)}
+.switch input:checked+span{background:var(--ok)}
+.switch input:checked+span:before{transform:translateX(16px)}
+.btn.small{padding:3px 10px;font-size:12px}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(80px);background:#111;color:#fff;padding:9px 16px;border-radius:8px;transition:transform .25s;font-size:13px;max-width:80%}
+#toast.show{transform:translateX(-50%) translateY(0)}
+#toast.err{background:var(--danger)}
+</style>
+</head>
+<body>
+<nav>
+  <div class="brand">⚡ LiteBrowser</div>
+  <button data-tab="history" class="active"><span class="ico">🕘</span>History</button>
+  <button data-tab="searches"><span class="ico">🔍</span>Searches</button>
+  <button data-tab="privacy"><span class="ico">🧹</span>Clear Data</button>
+  <button data-tab="dns"><span class="ico">🌐</span>DNS</button>
+  <button class="back" data-act="close">← Back to browsing</button>
+  <div class="hint">or press Esc</div>
+</nav>
+<main>
+
+<section id="history" class="active">
+  <h1>History</h1>
+  <p class="sub">Pages you've visited. Click one to open it.</p>
+  <div class="bar">
+    <input type="search" id="hq" placeholder="Search history">
+    <button class="btn ghost-danger" data-act="clear-history">Clear History</button>
+  </div>
+  <div id="historyList"></div>
+</section>
+
+<section id="searches">
+  <h1>Search History</h1>
+  <p class="sub">What you've searched on Google in LiteBrowser. Click one to search again.</p>
+  <div class="bar">
+    <input type="search" id="sq" placeholder="Filter searches">
+    <button class="btn ghost-danger" data-act="clear-searches">Clear Search History</button>
+  </div>
+  <div id="searchList"></div>
+  <p class="note">This only clears the searches saved in LiteBrowser. If you're signed in to Google, it may keep its own copy at myactivity.google.com.</p>
+</section>
+
+<section id="privacy">
+  <h1>Clear Browsing Data</h1>
+  <p class="sub">Choose what to delete, and which sites should stay signed in.</p>
+  <div class="card">
+    <h2>What to clear</h2>
+    <label class="check"><input type="checkbox" id="c-history" checked><span>Browsing history<small>Pages you've visited and your back/forward history</small></span></label>
+    <label class="check"><input type="checkbox" id="c-searches" checked><span>Search history<small>Your saved Google searches</small></span></label>
+    <label class="check"><input type="checkbox" id="c-cookies" checked><span>Cookies and sign-ins<small>Signs you out of every site that isn't on your keep list below</small></span></label>
+    <label class="check"><input type="checkbox" id="c-cache" checked><span>Cached images and files<small>Frees space. Doesn't sign you out.</small></span></label>
+  </div>
+  <div class="card">
+    <h2>Keep these sites signed in</h2>
+    <div class="bar">
+      <input type="search" id="siteq" placeholder="Find a site">
+      <button class="btn" data-act="keep-all">Keep all</button>
+      <button class="btn" data-act="keep-none">Keep none</button>
+    </div>
+    <div class="sites" id="siteList"></div>
+    <p class="note">Ticked sites keep their cookies, logins and saved data. Ticking Google also keeps YouTube and Gmail, and ticking Microsoft also keeps Outlook and Office. LiteBrowser remembers your choices.</p>
+  </div>
+  <div class="bar">
+    <button class="btn danger" id="clearBtn" data-act="clear-now">Clear Now</button>
+    <span class="summary" id="clearSummary"></span>
+  </div>
+</section>
+
+<section id="dns">
+  <h1>DNS</h1>
+  <p class="sub">DNS turns names like google.com into addresses. A slow or broken DNS server from your internet provider causes errors like <span class="mono">DNS_PROBE_POSSIBLE</span>.</p>
+  <div class="card">
+    <h2>Your Mac is using right now</h2>
+    <div id="dnsCurrent" class="mono"></div>
+  </div>
+  <div class="card">
+    <h2>Choose a provider</h2>
+    <div class="presets" id="presets"></div>
+  </div>
+  <div class="card">
+    <h2>Your DNS servers</h2>
+    <textarea id="dnsInput" placeholder="IP addresses, one per line:&#10;1.1.1.1&#10;8.8.8.8&#10;&#10;…or one secure DNS hostname:&#10;dns.example.com" spellcheck="false"></textarea>
+    <div class="bar" style="margin-top:10px;margin-bottom:0">
+      <button class="btn" data-act="dns-test">Test Speed</button>
+      <button class="btn" data-act="dns-save">Save</button>
+      <button class="btn primary" data-act="dns-apply">Save &amp; Use on This Mac</button>
+      <button class="btn" data-act="dns-reset" style="margin-left:auto">Reset to Automatic</button>
+    </div>
+    <div class="results" id="dnsResults"></div>
+    <p class="note"><b>IP addresses</b> (like 1.1.1.1) are applied to all your network connections when you click “Use on This Mac”. macOS asks for your password.<br>
+    <b>A secure DNS hostname</b> (like <span class="mono">dns.example.com</span>, the kind Android calls “Private DNS”) uses encrypted DNS-over-TLS. Paste a full <span class="mono">https://…/dns-query</span> address to use DNS-over-HTTPS instead. macOS only accepts these through a profile, so LiteBrowser creates one and opens System Settings for you to approve it.<br>
+    The “Fix DNS” button on error pages uses whatever you save here. “Reset to Automatic” undoes everything and goes back to your router's DNS.</p>
+  </div>
+</section>
+</main>
+<div id="toast"></div>
+
+<script>
+const S = { history: [], searches: [], sites: [], dns: { servers: [], presets: [], current: [] } };
+const $ = s => document.querySelector(s);
+const send = (cmd, extra = {}) => {
+  try { window.webkit.messageHandlers.settings.postMessage(Object.assign({ cmd }, extra)); }
+  catch (e) { console.log('send', cmd, extra); }
+};
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const hostOf = u => { try { return new URL(u).host.replace(/^www\./, ''); } catch (e) { return u; } };
+
+function showTab(t) {
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
+  document.querySelectorAll('section').forEach(s => s.classList.toggle('active', s.id === t));
+}
+
+function render(state) {
+  Object.assign(S, state);
+  renderHistory(); renderSearches(); renderSites(); renderDNS();
+}
+
+function dayLabel(ms) {
+  const d = new Date(ms), t = new Date();
+  const start = x => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((start(t) - start(d)) / 86400000);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  return d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: diff > 300 ? 'numeric' : undefined });
+}
+const timeLabel = ms => new Date(ms).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+
+function grouped(items, rowHTML) {
+  if (!items.length) return '';
+  let html = '', current = null, open = false;
+  for (const it of items) {
+    const label = dayLabel(it.date);
+    if (label !== current) {
+      if (open) html += '</div>';
+      html += `<div class="day">${esc(label)}</div><div class="list">`;
+      current = label; open = true;
+    }
+    html += rowHTML(it);
+  }
+  return html + (open ? '</div>' : '');
+}
+
+function renderHistory() {
+  const f = $('#hq').value.trim().toLowerCase();
+  const items = S.history.filter(i => !f || i.title.toLowerCase().includes(f) || i.url.toLowerCase().includes(f)).slice(0, 1500);
+  $('#historyList').innerHTML = grouped(items, i => `
+    <div class="item" data-open="${esc(i.url)}">
+      <span class="time">${timeLabel(i.date)}</span>
+      <div class="main"><div class="title">${esc(i.title || hostOf(i.url))}</div><div class="host">${esc(hostOf(i.url))}</div></div>
+      <button class="x" title="Remove" data-del-history="${esc(i.id)}">×</button>
+    </div>`) || `<div class="empty">${f ? 'Nothing matches your search.' : 'No history yet.'}</div>`;
+}
+
+function renderSearches() {
+  const f = $('#sq').value.trim().toLowerCase();
+  const items = S.searches.filter(i => !f || i.query.toLowerCase().includes(f)).slice(0, 1500);
+  $('#searchList').innerHTML = grouped(items, i => `
+    <div class="item" data-search="${esc(i.query)}">
+      <span class="time">${timeLabel(i.date)}</span>
+      <div class="main"><div class="title">🔍 ${esc(i.query)}</div></div>
+      <button class="x" title="Remove" data-del-search="${esc(i.id)}">×</button>
+    </div>`) || `<div class="empty">${f ? 'Nothing matches.' : 'No searches yet.'}</div>`;
+}
+
+function renderSites() {
+  const f = $('#siteq').value.trim().toLowerCase();
+  const sites = S.sites.filter(s => !f || s.domain.includes(f));
+  $('#siteList').innerHTML = sites.map(s => `
+    <label class="site"><input type="checkbox" data-site="${esc(s.domain)}" ${s.kept ? 'checked' : ''}>
+      <span class="d">${esc(s.domain)}</span>
+      <span class="tag ${s.kept ? '' : 'out'}">${s.kept ? 'Kept' : 'Will be cleared'}</span></label>`).join('')
+    || `<div class="empty">${S.sites.length ? 'No site matches.' : 'No saved site data yet.'}</div>`;
+  updateSummary();
+}
+
+function updateSummary() {
+  const kept = S.sites.filter(s => s.kept).length, out = S.sites.length - kept;
+  $('#clearSummary').textContent = $('#c-cookies').checked
+    ? `${out} site${out === 1 ? '' : 's'} will be signed out · ${kept} kept`
+    : 'Sign-ins will not be touched';
+}
+
+function renderDNS() {
+  const cur = S.dns.current || [];
+  $('#dnsCurrent').textContent = cur.length ? cur.join('   ') : 'Unknown';
+  if (document.activeElement !== $('#dnsInput')) $('#dnsInput').value = (S.dns.servers || []).join('\n');
+  const mine = (S.dns.servers || []).join(',');
+  $('#presets').innerHTML = S.dns.presets.map((p, i) => `
+    <div class="preset ${p.servers.join(',') === mine ? 'sel' : ''}" data-preset="${i}">
+      <b>${esc(p.name)}</b><span>${esc(p.note)}</span><div class="mono" style="font-size:11px;margin-top:3px">${esc(p.servers.join(', '))}</div>
+    </div>`).join('');
+}
+
+const dnsServers = () => $('#dnsInput').value.split(/[\s,;]+/).map(s => s.trim()).filter(Boolean);
+
+const kindOf = s => /^https:\/\//i.test(s) ? 'DNS-over-HTTPS' : (/^[0-9a-f.:]+$/i.test(s) ? 'plain DNS' : 'DNS-over-TLS (port 853)');
+
+function dnsResult(server, ok, ms) {
+  const row = document.querySelector(`#dnsResults [data-s="${CSS.escape(server)}"]`);
+  if (row) row.innerHTML = ok
+    ? `<span class="ok">✓</span> <span class="mono">${esc(server)}</span> answered in ${ms} ms <span style="color:var(--muted)">(${kindOf(server)})</span>`
+    : `<span class="bad">✗</span> <span class="mono">${esc(server)}</span> didn't respond${/^[0-9a-f.:]+$/i.test(server) ? '' : ' over ' + kindOf(server)}`;
+}
+
+let toastTimer;
+function toast(msg, isError) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.className = 'show' + (isError ? ' err' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.className = '', 3200);
+}
+
+function sendKeep() {
+  send('setKeep', { domains: S.sites.filter(s => s.kept).map(s => s.domain), present: S.sites.map(s => s.domain) });
+}
+
+let confirmTimer;
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-tab],[data-act],[data-open],[data-search],[data-del-history],[data-del-search],[data-preset]');
+  if (!el) return;
+  if (el.dataset.delHistory) { e.stopPropagation(); send('deleteHistory', { ids: [el.dataset.delHistory] }); return; }
+  if (el.dataset.delSearch) { e.stopPropagation(); send('deleteSearches', { ids: [el.dataset.delSearch] }); return; }
+  if (el.dataset.tab) return showTab(el.dataset.tab);
+  if (el.dataset.open) return send('open', { url: el.dataset.open });
+  if (el.dataset.search) return send('search', { query: el.dataset.search });
+  if (el.dataset.preset) {
+    const p = S.dns.presets[+el.dataset.preset];
+    $('#dnsInput').value = p.servers.join('\n');
+    document.querySelectorAll('.preset').forEach(x => x.classList.toggle('sel', x === el));
+    return;
+  }
+  switch (el.dataset.act) {
+    case 'clear-history': return send('clear', { history: true, searches: false, cookies: false, cache: false });
+    case 'clear-searches': return send('clear', { history: false, searches: true, cookies: false, cache: false });
+    case 'keep-all': S.sites.forEach(s => s.kept = true); renderSites(); return sendKeep();
+    case 'keep-none': S.sites.forEach(s => s.kept = false); renderSites(); return sendKeep();
+    case 'clear-now': {
+      const opts = { history: $('#c-history').checked, searches: $('#c-searches').checked, cookies: $('#c-cookies').checked, cache: $('#c-cache').checked };
+      if (!opts.history && !opts.searches && !opts.cookies && !opts.cache) return toast('Tick at least one thing to clear.', true);
+      if (el.dataset.armed !== '1') {
+        el.dataset.armed = '1'; el.textContent = 'Click again to confirm';
+        clearTimeout(confirmTimer);
+        confirmTimer = setTimeout(() => { el.dataset.armed = ''; el.textContent = 'Clear Now'; }, 4000);
+        return;
+      }
+      el.dataset.armed = ''; el.textContent = 'Clear Now'; clearTimeout(confirmTimer);
+      return send('clear', opts);
+    }
+    case 'dns-test': {
+      const list = dnsServers();
+      if (!list.length) return toast('Add at least one DNS server.', true);
+      $('#dnsResults').innerHTML = list.map(s => `<div data-s="${esc(s)}">… testing <span class="mono">${esc(s)}</span></div>`).join('');
+      return send('testDNS', { servers: list });
+    }
+    case 'dns-save': return send('saveDNS', { servers: dnsServers() });
+    case 'dns-apply': return send('applyDNS', { servers: dnsServers() });
+    case 'dns-reset': return send('resetDNS');
+    case 'close': return send('close');
+  }
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { e.preventDefault(); send('close'); }
+});
+
+document.addEventListener('change', e => {
+  if (e.target.dataset.site) {
+    const s = S.sites.find(x => x.domain === e.target.dataset.site);
+    if (s) s.kept = e.target.checked;
+    sendKeep();
+    renderSites();
+  }
+  if (e.target.id === 'c-cookies') updateSummary();
+});
+$('#hq').addEventListener('input', renderHistory);
+$('#sq').addEventListener('input', renderSearches);
+$('#siteq').addEventListener('input', renderSites);
+send('refresh');
+</script>
+</body>
+</html>

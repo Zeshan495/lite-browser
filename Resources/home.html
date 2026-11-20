@@ -1,0 +1,217 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>New Tab</title>
+<style>
+:root{
+  color-scheme:light dark;
+  --ink:#0f172a;--muted:#64748b;--glass:rgba(255,255,255,.62);--glass-strong:rgba(255,255,255,.86);
+  --line:rgba(15,23,42,.08);--shadow:0 10px 30px rgba(30,41,99,.12);
+  --a:#4338ca;--b:#0ea5e9;--c:#fbbf24;
+  --bg1:#eef2ff;--bg2:#e0f2fe;
+}
+@media (prefers-color-scheme:dark){:root{
+  --ink:#e2e8f0;--muted:#94a3b8;--glass:rgba(30,32,48,.55);--glass-strong:rgba(36,39,58,.9);
+  --line:rgba(255,255,255,.08);--shadow:0 10px 30px rgba(0,0,0,.35);
+  --bg1:#0b1022;--bg2:#0c1a2b;
+}}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  font:15px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;color:var(--ink);
+  background:linear-gradient(160deg,var(--bg1),var(--bg2));min-height:100vh;overflow-x:hidden;
+  display:flex;flex-direction:column;align-items:center;-webkit-user-select:none;user-select:none;
+}
+.blob{position:fixed;border-radius:50%;filter:blur(70px);opacity:.55;z-index:0;pointer-events:none;animation:drift 22s ease-in-out infinite alternate}
+.blob.one{width:520px;height:520px;background:var(--a);top:-180px;left:-120px;opacity:.28}
+.blob.two{width:460px;height:460px;background:var(--b);bottom:-160px;right:-100px;opacity:.3;animation-delay:-8s}
+.blob.three{width:220px;height:220px;background:var(--c);top:42%;right:18%;opacity:.16;animation-delay:-14s}
+@keyframes drift{to{transform:translate(40px,30px) scale(1.08)}}
+@media (prefers-reduced-motion:reduce){.blob{animation:none}}
+.wrap{position:relative;z-index:1;width:min(760px,92vw);margin-top:max(9vh,48px);display:flex;flex-direction:column;align-items:center}
+.brand{display:flex;align-items:center;gap:10px;margin-bottom:26px;opacity:.95}
+.brand img{width:38px;height:38px;filter:drop-shadow(0 4px 10px rgba(67,56,202,.35))}
+.brand span{font-weight:700;font-size:18px;letter-spacing:-.01em}
+.brand span b{background:linear-gradient(90deg,var(--a),var(--b));-webkit-background-clip:text;background-clip:text;color:transparent}
+.clock{font-size:clamp(56px,9vw,84px);font-weight:200;letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums}
+.greet{font-size:20px;font-weight:500;margin:10px 0 4px}
+.date{color:var(--muted);font-size:14px;margin-bottom:30px}
+form{width:100%;position:relative}
+.search{
+  width:100%;display:flex;align-items:center;gap:12px;padding:0 18px;height:58px;border-radius:29px;
+  background:var(--glass-strong);border:1px solid var(--line);box-shadow:var(--shadow);
+  -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);transition:box-shadow .2s,transform .2s;
+}
+.search:focus-within{box-shadow:0 0 0 4px rgba(14,165,233,.25),var(--shadow);transform:translateY(-1px)}
+.search svg{flex:none;opacity:.55}
+.search input{flex:1;border:0;outline:0;background:transparent;font:inherit;font-size:17px;color:inherit;-webkit-user-select:text;user-select:text}
+.search input::placeholder{color:var(--muted)}
+.kbd{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:2px 7px}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;width:100%;margin-top:36px}
+@media (max-width:620px){.tiles{grid-template-columns:repeat(3,1fr)}}
+.tile{
+  position:relative;display:flex;flex-direction:column;align-items:center;gap:10px;padding:18px 8px 14px;border-radius:18px;
+  background:var(--glass);border:1px solid var(--line);text-decoration:none;color:inherit;cursor:pointer;
+  -webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);transition:transform .18s,box-shadow .18s,background .18s;
+}
+.tile:hover{transform:translateY(-3px);box-shadow:var(--shadow);background:var(--glass-strong)}
+.tile:active{transform:translateY(-1px) scale(.98)}
+.icon{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.08);overflow:hidden}
+.icon img{width:30px;height:30px}
+.icon.letter{color:#fff;font-weight:700;font-size:21px}
+.name{font-size:13px;font-weight:500;max-width:100%;padding:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.x{position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;border:0;background:var(--line);color:var(--muted);
+   font-size:14px;line-height:22px;cursor:pointer;opacity:0;transition:opacity .15s}
+.tile:hover .x{opacity:1}
+.x:hover{background:#ef4444;color:#fff}
+.section-title{width:100%;display:flex;justify-content:space-between;align-items:center;margin-top:34px;color:var(--muted);font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.section-title + .tiles{margin-top:12px}
+.link{background:none;border:0;color:var(--muted);font:inherit;font-size:12px;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500}
+.link:hover{color:var(--ink)}
+footer{position:relative;z-index:1;margin-top:auto;padding:28px 0 22px;display:flex;gap:18px;color:var(--muted);font-size:12.5px}
+footer button{background:none;border:0;color:inherit;font:inherit;cursor:pointer;display:flex;gap:6px;align-items:center}
+footer button:hover{color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="blob one"></div><div class="blob two"></div><div class="blob three"></div>
+
+<div class="wrap">
+  <div class="brand"><img src="AppIcon.png" alt=""><span>Lite<b>Browser</b></span></div>
+  <div class="clock" id="clock">--:--</div>
+  <div class="greet" id="greet">Hello</div>
+  <div class="date" id="date"></div>
+
+  <form id="form" autocomplete="off">
+    <label class="search">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" placeholder="Search Google or type a URL" spellcheck="false" autocomplete="off">
+      <span class="kbd">/</span>
+    </label>
+  </form>
+
+  <div class="section-title"><span id="sitesTitle">Top sites</span><button class="link" id="restore" hidden>Show removed sites</button></div>
+  <div class="tiles" id="tiles"></div>
+</div>
+
+<footer>
+  <button data-settings="history">🕘 History</button>
+  <button data-settings="privacy">🧹 Clear data</button>
+  <button data-settings="dns">🌐 DNS</button>
+  <span>🔒 Your history stays on this device</span>
+</footer>
+
+<script>
+const $ = s => document.querySelector(s);
+const post = msg => {
+  try {
+    if (window.LiteAndroid) window.LiteAndroid.post(JSON.stringify(msg));          // Android app
+    else window.webkit.messageHandlers.home.postMessage(msg);                      // Mac app
+  } catch (e) {}
+};
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// ---- clock & greeting
+let userName = '';
+function tick() {
+  const now = new Date(), h = now.getHours();
+  $('#clock').textContent = now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }).replace(/\s?[AP]M$/i, '');
+  const part = h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : h < 22 ? 'Good evening' : 'Good night';
+  $('#greet').textContent = userName ? `${part}, ${userName}` : part;
+  $('#date').textContent = now.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+}
+tick(); setInterval(tick, 1000 * 15);
+
+// ---- search (same rules as the address bar)
+function toURL(text) {
+  const t = text.trim();
+  if (!t) return null;
+  if (/^(https?|file):\/\//i.test(t)) return t;
+  if (!/\s/.test(t) && (/\.[a-z]{2,}(\/|:|$)/i.test(t) || /^localhost(:\d+)?/.test(t))) {
+    return (/^(localhost|127\.|192\.168\.)/.test(t) ? 'http://' : 'https://') + t;
+  }
+  return 'https://www.google.com/search?q=' + encodeURIComponent(t);
+}
+$('#form').addEventListener('submit', e => {
+  e.preventDefault();
+  const url = toURL($('#q').value);
+  if (url) location.href = url;
+});
+document.addEventListener('keydown', e => {
+  if (e.key === '/' && document.activeElement !== $('#q')) { e.preventDefault(); $('#q').focus(); }
+});
+
+// ---- top sites
+const FRIENDLY = {
+  'google.com': 'Google', 'youtube.com': 'YouTube', 'mail.google.com': 'Gmail', 'github.com': 'GitHub',
+  'wikipedia.org': 'Wikipedia', 'en.wikipedia.org': 'Wikipedia', 'x.com': 'X', 'facebook.com': 'Facebook',
+  'instagram.com': 'Instagram', 'linkedin.com': 'LinkedIn', 'web.whatsapp.com': 'WhatsApp', 'chatgpt.com': 'ChatGPT',
+  'claude.ai': 'Claude', 'maps.google.com': 'Maps', 'drive.google.com': 'Drive', 'netflix.com': 'Netflix',
+  'reddit.com': 'Reddit', 'stackoverflow.com': 'Stack Overflow', 'amazon.com': 'Amazon', 'daraz.pk': 'Daraz',
+};
+const DEFAULTS = [
+  { host: 'google.com', url: 'https://www.google.com/' },
+  { host: 'youtube.com', url: 'https://www.youtube.com/' },
+  { host: 'mail.google.com', url: 'https://mail.google.com/' },
+  { host: 'github.com', url: 'https://github.com/' },
+  { host: 'en.wikipedia.org', url: 'https://en.wikipedia.org/' },
+  { host: 'maps.google.com', url: 'https://maps.google.com/' },
+  { host: 'web.whatsapp.com', url: 'https://web.whatsapp.com/' },
+  { host: 'drive.google.com', url: 'https://drive.google.com/' },
+];
+const COLORS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
+
+function friendly(host) {
+  if (FRIENDLY[host]) return FRIENDLY[host];
+  const parts = host.split('.');
+  const core = parts.length > 2 && parts[parts.length - 2].length <= 3 ? parts[parts.length - 3] : parts[parts.length - 2] || host;
+  return core.charAt(0).toUpperCase() + core.slice(1);
+}
+
+function tileHTML(s, i, removable) {
+  const name = friendly(s.host);
+  const color = COLORS[[...s.host].reduce((a, c) => a + c.charCodeAt(0), 0) % COLORS.length];
+  return `<a class="tile" href="${esc(s.url)}" title="${esc(s.title || s.host)}">
+      <div class="icon" data-letter="${esc(name.charAt(0))}" data-color="${color}">
+        <img src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(s.host)}&sz=64" alt="" onerror="fallback(this)">
+      </div>
+      <div class="name">${esc(name)}</div>
+      ${removable ? `<button class="x" title="Remove from top sites" data-remove="${esc(s.host)}">×</button>` : ''}
+    </a>`;
+}
+
+function fallback(img) {
+  const box = img.parentElement;
+  box.classList.add('letter');
+  box.style.background = box.dataset.color;
+  box.textContent = box.dataset.letter;
+}
+
+function renderHome(state) {
+  userName = state.name || '';
+  tick();
+  const real = (state.sites || []).slice(0, 8);
+  const seen = new Set(real.map(s => s.host));
+  const fill = real.length < 8
+    ? DEFAULTS.filter(d => !seen.has(d.host) && !(state.hidden || []).includes(d.host)).slice(0, 8 - real.length)
+    : [];
+  $('#sitesTitle').textContent = real.length ? 'Top sites' : 'Get started';
+  $('#tiles').innerHTML = real.map((s, i) => tileHTML(s, i, true)).join('') + fill.map((s, i) => tileHTML(s, i, false)).join('');
+  $('#restore').hidden = !(state.hidden && state.hidden.length);
+}
+
+document.addEventListener('click', e => {
+  const rm = e.target.closest('[data-remove]');
+  if (rm) { e.preventDefault(); e.stopPropagation(); post({ action: 'remove', host: rm.dataset.remove }); return; }
+  const st = e.target.closest('[data-settings]');
+  if (st) { post({ action: 'settings', tab: st.dataset.settings }); return; }
+  if (e.target.id === 'restore') post({ action: 'restore' });
+});
+
+renderHome({ sites: [], hidden: [] });
+post({ action: 'ready' });
+</script>
+</body>
+</html>

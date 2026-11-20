@@ -1,0 +1,13 @@
+#!/bin/sh
+# Command-line launcher:  litebrowser [url | search words]
+APP="${LITEBROWSER_APP:-$(cd "$(dirname "$0")/.." && pwd)/LiteBrowser.app}"
+[ -d "$APP" ] || APP="/Applications/LiteBrowser.app"
+if [ $# -eq 0 ]; then exec open -a "$APP"; fi
+case "$1" in
+  http://*|https://*|file://*) exec open -a "$APP" "$1" ;;
+esac
+if [ $# -eq 1 ] && printf %s "$1" | grep -Eq '^[A-Za-z0-9.-]+\.[A-Za-z]{2,}(/.*)?$'; then
+  exec open -a "$APP" "https://$1"
+fi
+Q=$(printf %s "$*" | sed -e 's/%/%25/g' -e 's/&/%26/g' -e 's/#/%23/g' -e 's/?/%3F/g' -e 's/+/%2B/g' -e 's/ /+/g')
+exec open -a "$APP" "https://www.google.com/search?q=$Q"

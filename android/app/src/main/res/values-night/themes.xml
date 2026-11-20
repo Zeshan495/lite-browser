@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Lite" parent="android:Theme.Material.NoActionBar">
+        <item name="android:colorAccent">#60A5FA</item>
+        <item name="android:colorPrimary">#818CF8</item>
+        <item name="android:windowBackground">#FF1F1F22</item>
+    </style>
+</resources>

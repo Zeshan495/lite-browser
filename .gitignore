@@ -1,0 +1,16 @@
+# macOS build
+build/
+dist/
+.DS_Store
+
+# Android build
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+*.apk
+*.aab
+
+# Never commit signing keys
+*.jks
+*.keystore
