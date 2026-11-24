@@ -9,19 +9,23 @@ extension Notification.Name {
 }
 
 final class DownloadItem {
-    let id = UUID()
+    let id: UUID
     weak var download: WKDownload?
     var filename: String
     var destination: URL?
+    var sourceURL: URL?
     var state: State = .running
     var error: String?
-    let started = Date()
-    enum State { case running, finished, failed, cancelled }
+    var started = Date()
+    enum State: String { case running, finished, failed, cancelled }
 
-    init(download: WKDownload, filename: String) {
+    init(id: UUID = UUID(), download: WKDownload?, filename: String) {
+        self.id = id
         self.download = download
         self.filename = filename
     }
+
+    var fileExists: Bool { destination.map { FileManager.default.fileExists(atPath: $0.path) } ?? false }
 
     var fraction: Double? {
         guard state == .running, let p = download?.progress, p.totalUnitCount > 0 else { return nil }
@@ -31,6 +35,7 @@ final class DownloadItem {
     var statusText: String {
         switch state {
         case .finished:
+            if !fileExists { return "Deleted or moved" }
             let size = destination.flatMap { try? $0.resourceValues(forKeys: [.fileSizeKey]).fileSize }
             return size.map { ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .file) + " · Done" } ?? "Done"
         case .failed: return "Failed: " + (error ?? "unknown error")
@@ -52,6 +57,42 @@ final class DownloadCenter: NSObject, WKDownloadDelegate {
     static let shared = DownloadCenter()
     private(set) var items: [DownloadItem] = []
     private var timer: Timer?
+    private let store: URL = {
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("LiteBrowser", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("downloads.json")
+    }()
+
+    private struct Record: Codable {
+        var id: String; var filename: String; var path: String?; var source: String?
+        var state: String; var error: String?; var date: Date
+    }
+
+    override init() {
+        super.init()
+        // Bring back the download list from earlier sessions
+        if let data = try? Data(contentsOf: store), let recs = try? JSONDecoder().decode([Record].self, from: data) {
+            items = recs.map { r in
+                let it = DownloadItem(id: UUID(uuidString: r.id) ?? UUID(), download: nil, filename: r.filename)
+                it.destination = r.path.map { URL(fileURLWithPath: $0) }
+                it.sourceURL = r.source.flatMap(URL.init(string:))
+                let st = DownloadItem.State(rawValue: r.state) ?? .failed
+                it.state = st == .running ? .failed : st          // interrupted when the app quit
+                it.error = st == .running ? "Interrupted when LiteBrowser quit" : r.error
+                it.started = r.date
+                return it
+            }
+        }
+    }
+
+    private func save() {
+        let recs = items.prefix(200).map {
+            Record(id: $0.id.uuidString, filename: $0.filename, path: $0.destination?.path,
+                   source: $0.sourceURL?.absoluteString, state: $0.state.rawValue, error: $0.error, date: $0.started)
+        }
+        if let data = try? JSONEncoder().encode(Array(recs)) { try? data.write(to: store, options: .atomic) }
+    }
 
     var hasActive: Bool { items.contains { $0.state == .running } }
 
@@ -75,9 +116,12 @@ final class DownloadCenter: NSObject, WKDownloadDelegate {
     func track(_ download: WKDownload) {
         download.delegate = self
         let name = download.originalRequest?.url?.lastPathComponent ?? "Download"
-        items.insert(DownloadItem(download: download, filename: name.isEmpty ? "Download" : name), at: 0)
-        if items.count > 50 { items.removeLast(items.count - 50) }
+        let it = DownloadItem(download: download, filename: name.isEmpty ? "Download" : name)
+        it.sourceURL = download.originalRequest?.url.flatMap { ["http", "https"].contains($0.scheme ?? "") ? $0 : nil }
+        items.insert(it, at: 0)
+        if items.count > 200 { items.removeLast(items.count - 200) }
         startTimer()
+        save()
         changed()
     }
 
@@ -124,12 +168,13 @@ final class DownloadCenter: NSObject, WKDownloadDelegate {
         item(for: download)?.filename = name
 
         var dir = folder
-        if !canWrite(to: dir) {
+        if Prefs.askDownloadLocation || !canWrite(to: dir) {
             // macOS blocked the folder (privacy setting) or it no longer exists: let the user pick a place.
             let panel = NSSavePanel()
             panel.nameFieldStringValue = name
-            panel.message = "LiteBrowser can't save to “\(dir.lastPathComponent)”. Choose where to save this file."
-            panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
+            panel.message = Prefs.askDownloadLocation ? "Where do you want to save this file?"
+                : "LiteBrowser can't save to “\(dir.lastPathComponent)”. Choose where to save this file."
+            panel.directoryURL = Prefs.askDownloadLocation ? dir : FileManager.default.homeDirectoryForCurrentUser
             guard panel.runModal() == .OK, let chosen = panel.url else {
                 item(for: download)?.state = .cancelled
                 changed()
@@ -137,7 +182,7 @@ final class DownloadCenter: NSObject, WKDownloadDelegate {
                 return
             }
             dir = chosen.deletingLastPathComponent()
-            folder = dir
+            if !Prefs.askDownloadLocation { folder = dir }
             try? FileManager.default.removeItem(at: chosen)    // WebKit refuses to overwrite
             item(for: download)?.destination = chosen
             changed()
@@ -158,6 +203,7 @@ final class DownloadCenter: NSObject, WKDownloadDelegate {
             DistributedNotificationCenter.default().post(name: Notification.Name("com.apple.DownloadFileFinished"), object: path)
         }
         NSApp.requestUserAttention(.informationalRequest)
+        save()
         changed()
     }
 
@@ -166,6 +212,7 @@ final class DownloadCenter: NSObject, WKDownloadDelegate {
         let ns = error as NSError
         if ns.domain == NSURLErrorDomain && ns.code == NSURLErrorCancelled { it.state = .cancelled }
         else { it.state = .failed; it.error = error.localizedDescription }
+        save()
         changed()
     }
 
@@ -174,7 +221,32 @@ final class DownloadCenter: NSObject, WKDownloadDelegate {
     func cancel(_ it: DownloadItem) {
         it.download?.cancel { _ in }
         it.state = .cancelled
+        save()
         changed()
+    }
+
+    func remove(_ it: DownloadItem) {
+        if it.state == .running { it.download?.cancel { _ in } }
+        items.removeAll { $0 === it }
+        save()
+        changed()
+    }
+
+    /// The list for Settings › Downloads.
+    func settingsInfo() -> [[String: Any]] {
+        items.map { it in
+            [
+                "id": it.id.uuidString,
+                "name": it.filename,
+                "status": it.statusText,
+                "state": it.state.rawValue,
+                "fraction": it.fraction ?? -1,
+                "source": it.sourceURL?.host ?? "",
+                "date": it.started.timeIntervalSince1970 * 1000,
+                "exists": it.fileExists,
+                "canRetry": it.sourceURL != nil,
+            ]
+        }
     }
 
     func reveal(_ it: DownloadItem) {
@@ -191,6 +263,7 @@ final class DownloadCenter: NSObject, WKDownloadDelegate {
 
     func clearFinished() {
         items.removeAll { $0.state != .running }
+        save()
         changed()
     }
 }
@@ -234,10 +307,13 @@ final class DownloadsViewController: NSViewController {
         let folderButton = NSButton(title: "Open Folder", target: self, action: #selector(openFolder))
         folderButton.bezelStyle = .rounded
         folderButton.controlSize = .small
+        let allButton = NSButton(title: "Show All", target: self, action: #selector(showAll))
+        allButton.bezelStyle = .rounded
+        allButton.controlSize = .small
         let clearButton = NSButton(title: "Clear", target: self, action: #selector(clearDone))
         clearButton.bezelStyle = .rounded
         clearButton.controlSize = .small
-        let header = NSStackView(views: [title, NSView(), clearButton, folderButton])
+        let header = NSStackView(views: [title, NSView(), clearButton, folderButton, allButton])
         header.orientation = .horizontal
 
         stack.orientation = .vertical
@@ -290,8 +366,8 @@ final class DownloadsViewController: NSViewController {
             none.textColor = .secondaryLabelColor
             stack.addArrangedSubview(none)
         }
-        for it in items { stack.addArrangedSubview(row(for: it)) }
-        let height = min(420, max(90, CGFloat(items.count) * 54 + 60))
+        for it in items.prefix(8) { stack.addArrangedSubview(row(for: it)) }
+        let height = min(460, max(90, CGFloat(min(items.count, 8)) * 54 + 60))
         preferredContentSize = NSSize(width: 380, height: height)
     }
 
@@ -332,7 +408,7 @@ final class DownloadsViewController: NSViewController {
         }
         switch it.state {
         case .running: button("xmark.circle", "Cancel") { DownloadCenter.shared.cancel(it) }
-        case .finished:
+        case .finished where it.fileExists:
             button("magnifyingglass.circle", "Show in Finder") { DownloadCenter.shared.reveal(it) }
             button("arrow.up.forward.app", "Open") { DownloadCenter.shared.open(it) }
         default: break
@@ -361,6 +437,7 @@ final class DownloadsViewController: NSViewController {
 
     @objc private func openFolder() { NSWorkspace.shared.open(DownloadCenter.shared.folder) }
     @objc private func clearDone() { DownloadCenter.shared.clearFinished() }
+    @objc private func showAll() { AppDelegate.shared.showAllDownloads(nil) }
 }
 
 final class FlippedView: NSView { override var isFlipped: Bool { true } }

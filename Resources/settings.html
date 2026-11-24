@@ -87,6 +87,24 @@ textarea{width:100%;min-height:96px;resize:vertical;font-family:ui-monospace,Men
 .switch input:checked+span{background:var(--ok)}
 .switch input:checked+span:before{transform:translateX(16px)}
 .btn.small{padding:3px 10px;font-size:12px}
+.about-head{display:flex;align-items:center;gap:16px;margin-bottom:18px}
+.about-head img{width:72px;height:72px}
+table.details{border-collapse:collapse;width:100%}
+table.details td{padding:6px 0;border-bottom:1px solid var(--line);vertical-align:top}
+table.details tr:last-child td{border-bottom:0}
+table.details td:first-child{color:var(--muted);width:130px}
+.dl{display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--line)}
+.dl:last-child{border-bottom:0}
+.dl .ic{font-size:24px;width:32px;text-align:center;flex:none}
+.dl .info{flex:1;min-width:0}
+.dl .n{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dl .m{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dl .m.bad{color:var(--danger)}
+.dl progress{width:100%;height:6px;margin:5px 0 2px;accent-color:var(--accent)}
+.dl .acts{display:flex;gap:6px;flex:none}
+.dl.gone .n{color:var(--muted);text-decoration:line-through}
+.update-ok{color:var(--ok);font-weight:600}
+.update-new{color:var(--accent);font-weight:600}
 #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(80px);background:#111;color:#fff;padding:9px 16px;border-radius:8px;transition:transform .25s;font-size:13px;max-width:80%}
 #toast.show{transform:translateX(-50%) translateY(0)}
 #toast.err{background:var(--danger)}
@@ -95,16 +113,51 @@ textarea{width:100%;min-height:96px;resize:vertical;font-family:ui-monospace,Men
 <body>
 <nav>
   <div class="brand">⚡ LiteBrowser</div>
-  <button data-tab="history" class="active"><span class="ico">🕘</span>History</button>
+  <button data-tab="general" class="active"><span class="ico">⚙️</span>General</button>
+  <button data-tab="history"><span class="ico">🕘</span>History</button>
   <button data-tab="searches"><span class="ico">🔍</span>Searches</button>
+  <button data-tab="downloads"><span class="ico">⬇️</span>Downloads</button>
   <button data-tab="privacy"><span class="ico">🧹</span>Clear Data</button>
   <button data-tab="dns"><span class="ico">🌐</span>DNS</button>
+  <button data-tab="about"><span class="ico">ℹ️</span>About</button>
   <button class="back" data-act="close">← Back to browsing</button>
   <div class="hint">or press Esc</div>
 </nav>
 <main>
 
-<section id="history" class="active">
+<section id="general" class="active">
+  <h1>General</h1>
+  <p class="sub">How LiteBrowser starts, where downloads go, and what the Home button does.</p>
+  <div class="card">
+    <h2>Default browser</h2>
+    <div class="bar" style="margin:0">
+      <span id="defaultStatus" style="flex:1"></span>
+      <button class="btn primary" data-act="make-default" id="makeDefaultBtn">Make Default</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>On startup</h2>
+    <label class="check"><input type="radio" name="startup" value="home"><span>Open the home page</span></label>
+    <label class="check"><input type="radio" name="startup" value="restore"><span>Continue where you left off<small>Reopens the windows and tabs you had open when you quit</small></span></label>
+  </div>
+  <div class="card">
+    <h2>Home button opens</h2>
+    <label class="check"><input type="radio" name="home" value="litebrowser"><span>LiteBrowser home page<small>Clock, search and your top sites</small></span></label>
+    <label class="check"><input type="radio" name="home" value="google"><span>Google</span></label>
+    <label class="check"><input type="radio" name="home" value="custom"><span>This page:</span></label>
+    <div class="bar" style="margin:4px 0 0 26px"><input type="search" id="homeCustom" placeholder="e.g. github.com or https://news.ycombinator.com"><button class="btn" data-act="save-home">Save</button></div>
+  </div>
+  <div class="card">
+    <h2>Downloads</h2>
+    <div class="bar" style="margin:0 0 4px">
+      <span>Save files to</span><span id="dlFolder" class="mono" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+      <button class="btn" data-act="dl-folder">Change…</button>
+    </div>
+    <label class="check"><input type="checkbox" id="askDownload"><span>Ask where to save each file before downloading</span></label>
+  </div>
+</section>
+
+<section id="history">
   <h1>History</h1>
   <p class="sub">Pages you've visited. Click one to open it.</p>
   <div class="bar">
@@ -123,6 +176,17 @@ textarea{width:100%;min-height:96px;resize:vertical;font-family:ui-monospace,Men
   </div>
   <div id="searchList"></div>
   <p class="note">This only clears the searches saved in LiteBrowser. If you're signed in to Google, it may keep its own copy at myactivity.google.com.</p>
+</section>
+
+<section id="downloads">
+  <h1>Downloads</h1>
+  <p class="sub">Everything you've downloaded with LiteBrowser. Removing an item from this list doesn't delete the file.</p>
+  <div class="bar">
+    <input type="search" id="dq" placeholder="Search downloads">
+    <button class="btn" data-act="dl-open-folder">Open Folder</button>
+    <button class="btn ghost-danger" data-act="dl-clear">Clear List</button>
+  </div>
+  <div id="dlList"></div>
 </section>
 
 <section id="privacy">
@@ -177,6 +241,46 @@ textarea{width:100%;min-height:96px;resize:vertical;font-family:ui-monospace,Men
     The “Fix DNS” button on error pages uses whatever you save here. “Reset to Automatic” undoes everything and goes back to your router's DNS.</p>
   </div>
 </section>
+<section id="about">
+  <div class="about-head">
+    <img src="AppIcon.png" alt="">
+    <div>
+      <h1 style="margin:0">LiteBrowser</h1>
+      <div id="verLine" class="sub" style="margin:2px 0 0"></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Updates</h2>
+    <div id="updateStatus" style="margin-bottom:10px">Click “Check for Updates” to see if a newer version is available.</div>
+    <div class="bar" style="margin:0">
+      <button class="btn primary" data-act="check-updates">Check for Updates</button>
+      <button class="btn" data-link="releases">Release Notes</button>
+    </div>
+    <p class="note">Installed with Homebrew? Update any time with <span class="mono">brew upgrade lite-browser</span>.</p>
+  </div>
+  <div class="card">
+    <h2>Details</h2>
+    <table class="details">
+      <tr><td>Version</td><td id="dVersion"></td></tr>
+      <tr><td>Build</td><td id="dBuild"></td></tr>
+      <tr><td>Engine</td><td id="dEngine"></td></tr>
+      <tr><td>System</td><td id="dSystem"></td></tr>
+      <tr><td>Search engine</td><td>Google</td></tr>
+      <tr><td>Your data</td><td>Stays on this Mac (~/Library/Application Support/LiteBrowser)</td></tr>
+    </table>
+    <div class="bar" style="margin:12px 0 0">
+      <button class="btn" data-act="copy-details">Copy Details</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Links</h2>
+    <div class="bar" style="margin:0;flex-wrap:wrap">
+      <button class="btn" data-link="repo">GitHub Page</button>
+      <button class="btn" data-link="latest">Android App (APK)</button>
+      <button class="btn" data-link="issues">Report a Problem</button>
+    </div>
+  </div>
+</section>
 </main>
 <div id="toast"></div>
 
@@ -197,6 +301,7 @@ function showTab(t) {
 
 function render(state) {
   Object.assign(S, state);
+  renderGeneral(); renderDownloads(); renderAbout();
   renderHistory(); renderSearches(); renderSites(); renderDNS();
 }
 
@@ -287,6 +392,77 @@ function dnsResult(server, ok, ms) {
     : `<span class="bad">✗</span> <span class="mono">${esc(server)}</span> didn't respond${/^[0-9a-f.:]+$/i.test(server) ? '' : ' over ' + kindOf(server)}`;
 }
 
+function renderGeneral() {
+  const g = S.general; if (!g) return;
+  $('#defaultStatus').innerHTML = g.isDefault
+    ? '<span class="update-ok">✓ LiteBrowser is your default browser</span>'
+    : 'LiteBrowser isn\'t your default browser. Links from other apps open elsewhere.';
+  $('#makeDefaultBtn').hidden = !!g.isDefault;
+  document.querySelectorAll('input[name=startup]').forEach(r => r.checked = r.value === g.startup);
+  document.querySelectorAll('input[name=home]').forEach(r => r.checked = r.value === g.homeMode);
+  if (document.activeElement !== $('#homeCustom')) $('#homeCustom').value = g.homeCustom || '';
+  $('#dlFolder').textContent = g.downloadFolder;
+  $('#askDownload').checked = !!g.askDownload;
+}
+
+const fileIcon = name => {
+  const e = (name.split('.').pop() || '').toLowerCase();
+  if (['png','jpg','jpeg','gif','webp','heic','svg'].includes(e)) return '🖼️';
+  if (['mp4','mov','mkv','webm','avi'].includes(e)) return '🎬';
+  if (['mp3','wav','m4a','flac','aac'].includes(e)) return '🎵';
+  if (['zip','rar','7z','tar','gz','dmg','pkg'].includes(e)) return '📦';
+  if (e === 'pdf') return '📕';
+  if (['doc','docx','pages','txt','rtf','md'].includes(e)) return '📄';
+  if (['xls','xlsx','csv','numbers'].includes(e)) return '📊';
+  if (['ppt','pptx','key'].includes(e)) return '📽️';
+  if (e === 'apk') return '🤖';
+  return '📁';
+};
+
+function renderDownloads() {
+  const f = ($('#dq') ? $('#dq').value : '').trim().toLowerCase();
+  const list = (S.downloads || []).filter(d => !f || d.name.toLowerCase().includes(f) || (d.source || '').includes(f));
+  const html = list.map(d => {
+    const when = new Date(d.date);
+    const meta = [d.status, d.source, dayLabel(d.date) + ' ' + timeLabel(d.date)].filter(Boolean).join(' · ');
+    const running = d.state === 'running';
+    const bad = d.state === 'failed';
+    let acts = '';
+    if (running) acts += `<button class="btn small" data-dl="cancel" data-id="${d.id}">Cancel</button>`;
+    if (d.state === 'finished' && d.exists) acts += `<button class="btn small primary" data-dl="open" data-id="${d.id}">Open</button><button class="btn small" data-dl="reveal" data-id="${d.id}">Show in Finder</button>`;
+    if ((bad || d.state === 'cancelled' || (d.state === 'finished' && !d.exists)) && d.canRetry) acts += `<button class="btn small" data-dl="retry" data-id="${d.id}">Retry</button>`;
+    if (!running) acts += `<button class="btn small" data-dl="remove" data-id="${d.id}" title="Remove from list">✕</button>`;
+    return `<div class="dl ${d.state === 'finished' && !d.exists ? 'gone' : ''}">
+      <div class="ic">${fileIcon(d.name)}</div>
+      <div class="info"><div class="n" title="${esc(d.name)}">${esc(d.name)}</div>
+        ${running ? `<progress ${d.fraction >= 0 ? `value="${d.fraction}" max="1"` : ''}></progress>` : ''}
+        <div class="m ${bad ? 'bad' : ''}">${esc(meta)}</div></div>
+      <div class="acts">${acts}</div></div>`;
+  }).join('');
+  $('#dlList').innerHTML = html
+    ? `<div class="list">${html}</div>`
+    : `<div class="empty">${f ? 'No downloads match.' : 'No downloads yet. Files you download will appear here.'}</div>`;
+}
+
+function updateDownloads(list) { S.downloads = list; renderDownloads(); }
+
+function renderAbout() {
+  const a = S.about; if (!a) return;
+  $('#verLine').textContent = `Version ${a.version}`;
+  $('#dVersion').textContent = a.version;
+  $('#dBuild').textContent = a.build;
+  $('#dEngine').textContent = `WebKit ${a.webkit}`;
+  $('#dSystem').textContent = a.macos;
+}
+
+function updateResult(r) {
+  const el = $('#updateStatus');
+  if (r.state === 'latest') el.innerHTML = `<span class="update-ok">✓ You're up to date.</span> LiteBrowser ${esc(r.current)} is the newest version.`;
+  else if (r.state === 'available') el.innerHTML = `<span class="update-new">LiteBrowser ${esc(r.latest)} is available</span> (you have ${esc(r.current)}).<br>
+      Update in Terminal: <span class="mono">brew upgrade lite-browser</span> <button class="btn small" data-act="copy-brew">Copy</button>`;
+  else el.innerHTML = `<span style="color:var(--danger)">Couldn't check for updates:</span> ${esc(r.error || 'unknown error')}`;
+}
+
 let toastTimer;
 function toast(msg, isError) {
   const t = $('#toast');
@@ -302,8 +478,10 @@ function sendKeep() {
 
 let confirmTimer;
 document.addEventListener('click', e => {
-  const el = e.target.closest('[data-tab],[data-act],[data-open],[data-search],[data-del-history],[data-del-search],[data-preset]');
+  const el = e.target.closest('[data-tab],[data-act],[data-open],[data-search],[data-del-history],[data-del-search],[data-preset],[data-dl],[data-link]');
   if (!el) return;
+  if (el.dataset.dl) return send('dlAction', { action: el.dataset.dl, id: el.dataset.id });
+  if (el.dataset.link) return send('openLink', { which: el.dataset.link });
   if (el.dataset.delHistory) { e.stopPropagation(); send('deleteHistory', { ids: [el.dataset.delHistory] }); return; }
   if (el.dataset.delSearch) { e.stopPropagation(); send('deleteSearches', { ids: [el.dataset.delSearch] }); return; }
   if (el.dataset.tab) return showTab(el.dataset.tab);
@@ -342,6 +520,17 @@ document.addEventListener('click', e => {
     case 'dns-apply': return send('applyDNS', { servers: dnsServers() });
     case 'dns-reset': return send('resetDNS');
     case 'close': return send('close');
+    case 'make-default': return send('makeDefault');
+    case 'save-home': return send('setHome', { mode: 'custom', url: $('#homeCustom').value });
+    case 'dl-folder': return send('dlFolder');
+    case 'dl-open-folder': return send('dlOpenFolder');
+    case 'dl-clear': return send('dlClear');
+    case 'check-updates': $('#updateStatus').textContent = 'Checking…'; return send('checkUpdates');
+    case 'copy-brew': return send('copy', { text: 'brew upgrade lite-browser' });
+    case 'copy-details': {
+      const a = S.about || {};
+      return send('copy', { text: `LiteBrowser ${a.version} (build ${a.build})\nWebKit ${a.webkit}\n${a.macos}` });
+    }
   }
 });
 
@@ -357,10 +546,20 @@ document.addEventListener('change', e => {
     renderSites();
   }
   if (e.target.id === 'c-cookies') updateSummary();
+  if (e.target.name === 'startup') send('setStartup', { value: e.target.value });
+  if (e.target.name === 'home') {
+    if (e.target.value === 'custom' && !$('#homeCustom').value.trim()) { $('#homeCustom').focus(); return; }
+    send('setHome', { mode: e.target.value, url: $('#homeCustom').value });
+  }
+  if (e.target.id === 'askDownload') send('setAsk', { on: e.target.checked });
 });
 $('#hq').addEventListener('input', renderHistory);
 $('#sq').addEventListener('input', renderSearches);
 $('#siteq').addEventListener('input', renderSites);
+$('#dq').addEventListener('input', renderDownloads);
+$('#homeCustom').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { document.querySelector('input[name=home][value=custom]').checked = true; send('setHome', { mode: 'custom', url: $('#homeCustom').value }); }
+});
 send('refresh');
 </script>
 </body>

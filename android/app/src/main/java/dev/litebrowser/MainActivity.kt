@@ -191,12 +191,11 @@ class MainActivity : Activity() {
 
         progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = 100
-            visibility = View.INVISIBLE
+            visibility = View.GONE          // no loading bar at the top
         }
         container = FrameLayout(this)
 
         root.addView(bar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        root.addView(progress, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(3)))
         root.addView(container, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(root)
         applySystemBars()
@@ -345,6 +344,7 @@ class MainActivity : Activity() {
         m.menu.add(0, 2, 1, "Reload")
         m.menu.add(0, 3, 2, "History")
         m.menu.add(0, 4, 3, "Search history")
+        m.menu.add(0, 10, 3, "Downloads")
         m.menu.add(0, 5, 4, "Clear browsing data")
         m.menu.add(0, 6, 5, "Desktop site").apply { isCheckable = true; isChecked = desktopMode }
         m.menu.add(0, 7, 6, "Share page")
@@ -361,6 +361,7 @@ class MainActivity : Activity() {
                 7 -> sharePage()
                 8 -> showDnsHelp()
                 9 -> showAbout()
+                10 -> openDownloads()
             }
             true
         }
@@ -377,6 +378,7 @@ class MainActivity : Activity() {
             .put("sites", history.topSites(8))
             .put("hidden", JSONArray(history.hidden.toList()))
             .put("name", "")
+            .put("version", runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull() ?: "")
         tab.webView.evaluateJavascript("window.renderHome && renderHome($state)", null)
     }
 
@@ -426,6 +428,7 @@ class MainActivity : Activity() {
             "settings" -> when (msg.optString("tab")) {
                 "privacy" -> showClearData()
                 "dns" -> showDnsHelp()
+                "downloads" -> openDownloads()
                 else -> showHistory()
             }
         }
@@ -462,7 +465,7 @@ class MainActivity : Activity() {
 
         override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
             if (!url.startsWith("about:") && !url.startsWith("data:")) tab.errorToken = null
-            if (tab === current) { progress.visibility = View.VISIBLE; updateChrome() }
+            if (tab === current) updateChrome()
         }
 
         override fun onPageFinished(view: WebView, url: String) {
@@ -471,7 +474,7 @@ class MainActivity : Activity() {
                 history.record(url, view.title ?: "")
             }
             pushHome(tab)
-            if (tab === current) { progress.visibility = View.INVISIBLE; updateChrome() }
+            if (tab === current) updateChrome()
         }
 
         override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
@@ -556,10 +559,7 @@ class MainActivity : Activity() {
 
     inner class TabChrome(private val tab: Tab) : WebChromeClient() {
         override fun onProgressChanged(view: WebView, newProgress: Int) {
-            if (tab === current) {
-                progress.progress = newProgress
-                progress.visibility = if (newProgress in 1..99) View.VISIBLE else View.INVISIBLE
-            }
+            // no loading bar: the address bar and tab title update when the page is ready
         }
 
         override fun onReceivedTitle(view: WebView, title: String?) {
@@ -818,6 +818,11 @@ class MainActivity : Activity() {
             .setMessage("A small, fast browser with Google search, top sites and smart DNS error checks.\n\nYour history stays on this phone.")
             .setPositiveButton("OK", null)
             .show()
+    }
+
+    private fun openDownloads() {
+        try { startActivity(Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)) }
+        catch (_: Exception) { toast("Open the Files app → Downloads") }
     }
 
     private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_SHORT).show()

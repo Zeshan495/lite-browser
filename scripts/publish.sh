@@ -30,7 +30,7 @@ bold "Publishing LiteBrowser $VERSION as github.com/$REPO"
 
 # --- 1. Code repository -----------------------------------------------------------------------
 # Put your GitHub name into the install instructions
-sed -i '' "s#YOU/tap/lite-browser#$OWNER/tap/lite-browser#g; s#YOUR_GITHUB_USER/lite-browser#$REPO#g" README.md Formula/lite-browser.rb 2>/dev/null || true
+sed -i '' "s#YOU/tap/lite-browser#$OWNER/tap/lite-browser#g; s#YOUR_GITHUB_USER/lite-browser#$REPO#g" README.md Formula/lite-browser.rb Info.plist 2>/dev/null || true
 [ -d .git ] || git init -b main >/dev/null
 git add -A
 git -c user.name="${GIT_AUTHOR_NAME:-$OWNER}" -c user.email="${GIT_AUTHOR_EMAIL:-$OWNER@users.noreply.github.com}" \

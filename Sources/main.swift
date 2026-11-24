@@ -393,6 +393,101 @@ enum Prefs {
         get { Set(d.array(forKey: "keptSites") as? [String] ?? []) }
         set { d.set(Array(newValue).sorted(), forKey: "keptSites") }
     }
+
+    /// "home" = open the home page, "restore" = reopen last session's tabs.
+    static var startup: String {
+        get { d.string(forKey: "startup") ?? "home" }
+        set { d.set(newValue, forKey: "startup") }
+    }
+
+    /// What the Home button opens: "litebrowser", "google" or "custom".
+    static var homeMode: String {
+        get { d.string(forKey: "homeMode") ?? "litebrowser" }
+        set { d.set(newValue, forKey: "homeMode") }
+    }
+
+    static var homeCustom: String {
+        get { d.string(forKey: "homeCustom") ?? "" }
+        set { d.set(newValue, forKey: "homeCustom") }
+    }
+
+    static var homeButtonURL: URL {
+        switch homeMode {
+        case "google": return Config.google
+        case "custom": return homeCustom.trimmingCharacters(in: .whitespaces).isEmpty ? Config.home : resolveInput(homeCustom)
+        default: return Config.home
+        }
+    }
+
+    static var askDownloadLocation: Bool {
+        get { d.bool(forKey: "askDownloadLocation") }
+        set { d.set(newValue, forKey: "askDownloadLocation") }
+    }
+}
+
+// MARK: - Version info, updates, default browser
+
+enum AppInfo {
+    static var version: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0" }
+    static var build: String { Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1" }
+    static var webKitVersion: String {
+        Bundle(for: WKWebView.self).infoDictionary?["CFBundleShortVersionString"] as? String
+            ?? Bundle(for: WKWebView.self).infoDictionary?["CFBundleVersion"] as? String ?? "built-in"
+    }
+    static var macOS: String {
+        let v = ProcessInfo.processInfo.operatingSystemVersion
+        return "macOS \(v.majorVersion).\(v.minorVersion)" + (v.patchVersion > 0 ? ".\(v.patchVersion)" : "")
+    }
+    /// "owner/lite-browser" — filled in by the publish script.
+    static var repository: String {
+        let r = Bundle.main.infoDictionary?["LBRepository"] as? String ?? ""
+        return r.contains("YOUR_GITHUB_USER") || r.isEmpty ? "Zeshan495/lite-browser" : r
+    }
+    static var repoURL: URL { URL(string: "https://github.com/\(repository)")! }
+
+    /// Asks GitHub for the newest release. Calls back on the main thread with (latestVersion, pageURL) or an error text.
+    static func checkForUpdates(_ done: @escaping (Result<(String, URL), Error>) -> Void) {
+        var req = URLRequest(url: URL(string: "https://api.github.com/repos/\(repository)/releases/latest")!, timeoutInterval: 15)
+        req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        URLSession.shared.dataTask(with: req) { data, resp, err in
+            let result: Result<(String, URL), Error>
+            if let err = err {
+                result = .failure(err)
+            } else if let data = data,
+                      let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+                      let tag = obj["tag_name"] as? String {
+                let page = (obj["html_url"] as? String).flatMap(URL.init(string:)) ?? repoURL
+                result = .success((tag.hasPrefix("v") ? String(tag.dropFirst()) : tag, page))
+            } else {
+                let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+                result = .failure(SimpleError("GitHub answered with status \(code)."))
+            }
+            DispatchQueue.main.async { done(result) }
+        }.resume()
+    }
+}
+
+struct SimpleError: LocalizedError {
+    let text: String
+    init(_ t: String) { text = t }
+    var errorDescription: String? { text }
+}
+
+enum DefaultBrowser {
+    static var isDefault: Bool {
+        guard let app = NSWorkspace.shared.urlForApplication(toOpen: URL(string: "https://example.com")!) else { return false }
+        return Bundle(url: app)?.bundleIdentifier == Bundle.main.bundleIdentifier
+    }
+
+    /// macOS shows its own "change default browser?" confirmation.
+    static func make(_ done: @escaping (Bool) -> Void) {
+        let me = Bundle.main.bundleURL
+        NSWorkspace.shared.setDefaultApplication(at: me, toOpenURLsWithScheme: "http") { e1 in
+            NSWorkspace.shared.setDefaultApplication(at: me, toOpenURLsWithScheme: "https") { e2 in
+                DispatchQueue.main.async { done(e1 == nil && e2 == nil) }
+            }
+        }
+    }
 }
 
 struct DNSPreset { let name: String; let note: String; let servers: [String] }
@@ -782,6 +877,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, WKSc
         window.delegate = self
         config.userContentController.add(WeakScriptHandler(self), name: "settings")
         webView.navigationDelegate = self
+        NotificationCenter.default.addObserver(self, selector: #selector(pushDownloads), name: .liteDownloadsChanged, object: nil)
         if let url = Bundle.main.url(forResource: "settings", withExtension: "html") {
             webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
         } else {
@@ -823,12 +919,24 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, WKSc
         }
         let presets: [[String: Any]] = DNSPresets.list.map { ["name": $0.name, "note": $0.note, "servers": $0.servers] }
         let current = DNSInfo.current()
+        let general: [String: Any] = [
+            "startup": Prefs.startup, "homeMode": Prefs.homeMode, "homeCustom": Prefs.homeCustom,
+            "isDefault": DefaultBrowser.isDefault,
+            "downloadFolder": DownloadCenter.shared.folder.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"),
+            "askDownload": Prefs.askDownloadLocation,
+        ]
+        let about: [String: Any] = [
+            "version": AppInfo.version, "build": AppInfo.build, "webkit": AppInfo.webKitVersion,
+            "macos": AppInfo.macOS, "repo": AppInfo.repository,
+        ]
+        let downloads = DownloadCenter.shared.settingsInfo()
         WKWebsiteDataStore.default().fetchDataRecords(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes()) { [weak self] records in
             guard let self = self else { return }
             let kept = Prefs.keptSites
             let domains = Set(records.map { $0.displayName }).sorted()
             let sites: [[String: Any]] = domains.map { ["domain": $0, "kept": SiteData.isKept($0, kept)] }
             let state: [String: Any] = [
+                "general": general, "about": about, "downloads": downloads,
                 "history": history, "searches": searches, "sites": sites,
                 "dns": ["servers": Prefs.dnsServers, "presets": presets, "current": current],
             ]
@@ -845,6 +953,14 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, WKSc
         return result.entries?.map { $0.display }
     }
 
+    /// Sends just the downloads list (used for live progress while Settings is open).
+    @objc private func pushDownloads() {
+        guard loaded, window?.isVisible == true,
+              let data = try? JSONSerialization.data(withJSONObject: DownloadCenter.shared.settingsInfo()),
+              let json = String(data: data, encoding: .utf8) else { return }
+        js("updateDownloads(\(json))")
+    }
+
     func userContentController(_ c: WKUserContentController, didReceive message: WKScriptMessage) {
         guard message.frameInfo.isMainFrame, webView.url?.isFileURL == true,
               let body = message.body as? [String: Any], let cmd = body["cmd"] as? String else { return }
@@ -854,6 +970,149 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, WKSc
             pushState()
         case "close":
             closeAndReturn()
+
+        // History & searches
+        case "open":
+            if let s = body["url"] as? String, let u = URL(string: s), ["http", "https"].contains(u.scheme ?? "") {
+                app.openInBrowser(u)
+            }
+        case "search":
+            if let q = body["query"] as? String { app.openInBrowser(googleSearchURL(q)) }
+        case "deleteHistory":
+            HistoryStore.shared.deleteHistory(ids: Set(body["ids"] as? [String] ?? []))
+            pushState()
+        case "deleteSearches":
+            HistoryStore.shared.deleteSearches(ids: Set(body["ids"] as? [String] ?? []))
+            pushState()
+
+        // Clear data
+        case "setKeep":
+            Prefs.keptSites = SiteData.updatedKeepList(checked: body["domains"] as? [String] ?? [],
+                                                       present: body["present"] as? [String] ?? [])
+            pushState()
+        case "clear":
+            let opts = ClearOptions(history: body["history"] as? Bool ?? false,
+                                    searches: body["searches"] as? Bool ?? false,
+                                    cookies: body["cookies"] as? Bool ?? false,
+                                    cache: body["cache"] as? Bool ?? false)
+            app.clear(opts) { [weak self] in
+                self?.toast("Cleared.")
+                self?.pushState()
+            }
+
+        // DNS
+        case "testDNS":
+            for s in (body["servers"] as? [String] ?? []) {
+                guard DNSPresets.isValid(s) else { js("dnsResult(\(jsString(s)), false, 0)"); continue }
+                DNSTest.run(s) { [weak self] ok, ms in
+                    guard let self = self else { return }
+                    self.js("dnsResult(\(self.jsString(s)), \(ok), \(ms))")
+                }
+            }
+        case "saveDNS":
+            if let list = validServers(body) {
+                Prefs.dnsServers = list
+                toast("Saved. “Fix DNS” will use these servers.")
+                pushState()
+            }
+        case "applyDNS":
+            if let list = validServers(body) {
+                Prefs.dnsServers = list
+                app.applyDNS(list) { [weak self] result in
+                    switch result {
+                    case .applied: self?.toast("Your Mac now uses \(list.joined(separator: ", ")).")
+                    case .profileOpened: self?.toast("Almost done: approve the “LiteBrowser DNS” profile in System Settings.")
+                    case .none: break
+                    }
+                    self?.pushState()
+                }
+            }
+        case "resetDNS":
+            app.applyDNS(nil) { [weak self] result in
+                if case .applied = result { self?.toast("DNS reset to automatic (your router's DNS).") }
+                self?.pushState()
+            }
+
+        // General
+        case "setStartup":
+            Prefs.startup = body["value"] as? String == "restore" ? "restore" : "home"
+            toast(Prefs.startup == "restore" ? "LiteBrowser will reopen your tabs next time." : "LiteBrowser will start with the home page.")
+        case "setHome":
+            Prefs.homeMode = body["mode"] as? String ?? "litebrowser"
+            if let u = body["url"] as? String { Prefs.homeCustom = u }
+            toast("Home button updated.")
+        case "makeDefault":
+            DefaultBrowser.make { [weak self] ok in
+                self?.toast(ok ? "LiteBrowser is now your default browser." : "macOS didn't change the default browser.", error: !ok)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self?.pushState() }
+            }
+        case "setAsk":
+            Prefs.askDownloadLocation = body["on"] as? Bool ?? false
+        case "dlFolder":
+            let panel = NSOpenPanel()
+            panel.canChooseDirectories = true
+            panel.canChooseFiles = false
+            panel.canCreateDirectories = true
+            panel.prompt = "Choose"
+            panel.message = "Choose where LiteBrowser saves downloads"
+            panel.directoryURL = DownloadCenter.shared.folder
+            guard let w = window else { return }
+            panel.beginSheetModal(for: w) { [weak self] r in
+                if r == .OK, let u = panel.url { DownloadCenter.shared.folder = u; self?.toast("Downloads will be saved to “\(u.lastPathComponent)”.") }
+                self?.pushState()
+            }
+
+        // Downloads
+        case "dlAction":
+            let id = body["id"] as? String ?? ""
+            guard let it = DownloadCenter.shared.items.first(where: { $0.id.uuidString == id }) else { return }
+            switch body["action"] as? String ?? "" {
+            case "open": DownloadCenter.shared.open(it)
+            case "reveal": DownloadCenter.shared.reveal(it)
+            case "cancel": DownloadCenter.shared.cancel(it)
+            case "remove": DownloadCenter.shared.remove(it)
+            case "retry":
+                if let u = it.sourceURL { DownloadCenter.shared.remove(it); app.openInBrowser(u) }
+                else { toast("The original link for this file isn't known.", error: true) }
+            default: break
+            }
+        case "dlOpenFolder":
+            NSWorkspace.shared.open(DownloadCenter.shared.folder)
+        case "dlClear":
+            DownloadCenter.shared.clearFinished()
+            toast("Download list cleared. Your files are still in the folder.")
+
+        // About
+        case "checkUpdates":
+            AppInfo.checkForUpdates { [weak self] result in
+                guard let self = self else { return }
+                var info: [String: Any] = ["current": AppInfo.version]
+                switch result {
+                case .success(let (latest, page)):
+                    let newer = latest.compare(AppInfo.version, options: .numeric) == .orderedDescending
+                    info["state"] = newer ? "available" : "latest"
+                    info["latest"] = latest
+                    info["url"] = page.absoluteString
+                case .failure(let e):
+                    info["state"] = "error"
+                    info["error"] = e.localizedDescription
+                }
+                if let d = try? JSONSerialization.data(withJSONObject: info), let j = String(data: d, encoding: .utf8) {
+                    self.js("updateResult(\(j))")
+                }
+            }
+        case "openLink":
+            let base = AppInfo.repoURL.absoluteString
+            let map = ["repo": base, "releases": base + "/releases", "issues": base + "/issues/new",
+                       "latest": base + "/releases/latest"]
+            if let s = map[body["which"] as? String ?? ""] ?? (body["url"] as? String), let u = URL(string: s) {
+                app.openInBrowser(u)
+                closeAndReturn()
+            }
+        case "copy":
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(body["text"] as? String ?? "", forType: .string)
+            toast("Copied.")
         default:
             break
         }
@@ -912,9 +1171,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         DispatchQueue.main.async {
             // If the app was launched by opening a link, application(_:open:) already made a window.
             guard self.controllers.isEmpty else { return }
-            self.openWindow(url: args.first.map(resolveInput) ?? Config.home)
+            if let first = args.first { self.openWindow(url: resolveInput(first)); return }
+            if Prefs.startup == "restore", self.restoreSession() { return }
+            self.openWindow(url: Config.home)
         }
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    // MARK: Session (reopen tabs from last time)
+
+    func applicationWillTerminate(_ notification: Notification) { saveSession() }
+
+    private func saveSession() {
+        let windows: [[String: Any]] = browserControllers.map { c in
+            let urls = c.tabs.map { t -> String in
+                guard let u = t.currentURL else { return "home" }
+                return Config.isHome(u) ? "home" : u.absoluteString
+            }
+            let active = c.tabs.firstIndex { $0 === c.activeTab } ?? 0
+            return ["urls": urls, "active": active]
+        }
+        UserDefaults.standard.set(windows, forKey: "lastSession")
+    }
+
+    /// Reopens the windows and tabs saved when LiteBrowser last quit. Returns false if there was nothing.
+    private func restoreSession() -> Bool {
+        guard let windows = UserDefaults.standard.array(forKey: "lastSession") as? [[String: Any]], !windows.isEmpty else { return false }
+        var opened = false
+        for w in windows {
+            let urls = (w["urls"] as? [String] ?? []).map { $0 == "home" ? Config.home : (URL(string: $0) ?? Config.home) }
+            guard let first = urls.first else { continue }
+            let c = openWindow(url: first)
+            for u in urls.dropFirst() { c.addTab(url: u, activate: false) }
+            let active = w["active"] as? Int ?? 0
+            if c.tabs.indices.contains(active) { c.select(c.tabs[active]) }
+            opened = true
+        }
+        return opened
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
@@ -1039,7 +1332,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settings?.show(tab: tab)
     }
 
-    @objc func showSettings(_ sender: Any?) { openSettings("history") }
+    @objc func showSettings(_ sender: Any?) { openSettings("general") }
+    @objc func showAbout(_ sender: Any?) { openSettings("about") }
+    @objc func showAllDownloads(_ sender: Any?) { openSettings("downloads") }
     @objc func showHistory(_ sender: Any?) { openSettings("history") }
     @objc func showSearches(_ sender: Any?) { openSettings("searches") }
     @objc func clearBrowsingData(_ sender: Any?) { openSettings("privacy") }
@@ -1196,7 +1491,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         let B = BrowserWindowController.self
         menu("LiteBrowser", [
-            item("About LiteBrowser", #selector(NSApplication.orderFrontStandardAboutPanel(_:)), ""),
+            item("About LiteBrowser", #selector(showAbout(_:)), ""),
+            item("Check for Updates…", #selector(showAbout(_:)), ""),
             .separator(),
             item("Settings…", #selector(showSettings(_:)), ","),
             .separator(),

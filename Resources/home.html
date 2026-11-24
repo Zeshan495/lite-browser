@@ -100,7 +100,9 @@ footer button:hover{color:var(--ink)}
   <button data-settings="history">🕘 History</button>
   <button data-settings="privacy">🧹 Clear data</button>
   <button data-settings="dns">🌐 DNS</button>
+  <button data-settings="downloads">⬇️ Downloads</button>
   <span>🔒 Your history stays on this device</span>
+  <span id="ver"></span>
 </footer>
 
 <script>
@@ -191,6 +193,7 @@ function fallback(img) {
 
 function renderHome(state) {
   userName = state.name || '';
+  if (state.version) $('#ver').textContent = 'LiteBrowser ' + state.version;
   tick();
   const real = (state.sites || []).slice(0, 8);
   const seen = new Set(real.map(s => s.host));

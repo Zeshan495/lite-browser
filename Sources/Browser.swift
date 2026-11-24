@@ -552,6 +552,7 @@ final class BrowserTab: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMe
             "sites": HistoryStore.shared.topSites(limit: 8),
             "hidden": Array(Prefs.hiddenTopSites),
             "name": first,
+            "version": AppInfo.version,
         ]
         if let data = try? JSONSerialization.data(withJSONObject: state),
            let json = String(data: data, encoding: .utf8) {
@@ -844,7 +845,6 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate {
     private let addressField = AddressField()
     private let omnibox = OmniboxView()
     private let lockIcon = NSImageView()
-    private let progressLine = ProgressLine()
     private let webContainer = NSView()
 
     init(url: URL?, configuration: WKWebViewConfiguration? = nil) {
@@ -950,16 +950,10 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate {
         omnibox.setContentHuggingPriority(.defaultLow, for: .horizontal)
         row.translatesAutoresizingMaskIntoConstraints = false
         toolbarRow.addSubview(row)
-        progressLine.translatesAutoresizingMaskIntoConstraints = false
-        toolbarRow.addSubview(progressLine)
         NSLayoutConstraint.activate([
             row.leadingAnchor.constraint(equalTo: toolbarRow.leadingAnchor),
             row.trailingAnchor.constraint(equalTo: toolbarRow.trailingAnchor),
             row.centerYAnchor.constraint(equalTo: toolbarRow.centerYAnchor),
-            progressLine.leadingAnchor.constraint(equalTo: toolbarRow.leadingAnchor),
-            progressLine.trailingAnchor.constraint(equalTo: toolbarRow.trailingAnchor),
-            progressLine.bottomAnchor.constraint(equalTo: toolbarRow.bottomAnchor),
-            progressLine.heightAnchor.constraint(equalToConstant: 2),
         ])
 
         let content = NSView()
@@ -1093,7 +1087,6 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate {
         forwardButton.isEnabled = wv.canGoForward
         let loading = wv.isLoading
         reloadButton.setSymbol(loading ? "xmark" : "arrow.clockwise", tip: loading ? "Stop" : "Reload")
-        progressLine.progress = loading ? max(0.08, wv.estimatedProgress) : 0
         if window?.title != tab.displayTitle {
             window?.title = tab.displayTitle
             positionTrafficLights()      // AppKit can re-lay out the title bar when the title changes
@@ -1129,7 +1122,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate {
 
     @objc func goBack(_ sender: Any?) { activeTab?.webView.goBack() }
     @objc func goForward(_ sender: Any?) { activeTab?.webView.goForward() }
-    @objc func goHome(_ sender: Any?) { activeTab?.load(Config.home) }
+    @objc func goHome(_ sender: Any?) { activeTab?.load(Prefs.homeButtonURL) }
     @objc func stopLoading(_ sender: Any?) { activeTab?.webView.stopLoading() }
     @objc func reloadOrStop(_ sender: Any?) {
         guard let t = activeTab else { return }
