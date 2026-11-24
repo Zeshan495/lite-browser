@@ -309,12 +309,16 @@ object AppLock {
 
     /** Wrong attempts in a row, written to disk immediately so closing the app doesn't reset it. */
     fun failures(c: Context) = prefs(c).getInt("failures", 0)
+
+    /** PIN length, so the lock screen can check as soon as the last digit is typed (0 = not known yet). */
+    fun pinLength(c: Context) = prefs(c).getInt("length", 0)
+    fun setPinLength(c: Context, n: Int) { prefs(c).edit().putInt("length", n).apply() }
     fun setFailures(c: Context, n: Int) { prefs(c).edit().putInt("failures", n).commit() }
 
     fun set(c: Context, pin: String) {
         val salt = ByteArray(16).also { java.security.SecureRandom().nextBytes(it) }
         val saltB64 = android.util.Base64.encodeToString(salt, android.util.Base64.NO_WRAP)
-        prefs(c).edit().putString("salt", saltB64).putString("hash", hash(pin, salt)).putInt("failures", 0).commit()
+        prefs(c).edit().putString("salt", saltB64).putString("hash", hash(pin, salt)).putInt("length", pin.length).putInt("failures", 0).commit()
     }
 
     fun disable(c: Context) { prefs(c).edit().clear().commit() }

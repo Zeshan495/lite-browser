@@ -381,6 +381,7 @@ class MainActivity : Activity() {
             pin.setText("")
             if (AppLock.verify(this, entered)) {
                 AppLock.setFailures(this, 0)
+                AppLock.setPinLength(this, entered.length)   // PINs set before 1.0.9 learn their length here
                 hideKeyboard()
                 frame.removeView(screen)
                 lockView = null
@@ -405,6 +406,15 @@ class MainActivity : Activity() {
         }
         unlock.setOnClickListener { attempt() }
         pin.setOnEditorActionListener { _, _, _ -> attempt(); true }
+        // Like a phone passcode: check as soon as the last digit is typed (counts as an attempt)
+        pin.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                val n = AppLock.pinLength(this@MainActivity)
+                if (n > 0 && (s?.length ?: 0) == n) pin.post { if (pin.text.length == n) attempt() }
+            }
+        })
 
         lockView = screen
         frame.addView(screen, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))

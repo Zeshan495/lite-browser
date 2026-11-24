@@ -20,6 +20,12 @@ enum AppLock {
         set { d.set(newValue, forKey: "pinLockOnWake") }
     }
 
+    /// Length of the PIN, so the lock screen can check it as soon as the last digit is typed (0 = not known yet).
+    static var pinLength: Int {
+        get { d.integer(forKey: "pinLength") }
+        set { d.set(newValue, forKey: "pinLength") }
+    }
+
     static func isValidFormat(_ pin: String) -> Bool {
         (4...10).contains(pin.count) && pin.allSatisfy { ("0"..."9").contains($0) }
     }
@@ -28,11 +34,12 @@ enum AppLock {
         let salt = Data((0..<16).map { _ in UInt8.random(in: 0...255) }).base64EncodedString()
         d.set(salt, forKey: "pinSalt")
         d.set(hash(pin, salt: salt), forKey: "pinHash")
+        pinLength = pin.count
         failures = 0
     }
 
     static func disable() {
-        ["pinSalt", "pinHash", "pinFailures"].forEach { d.removeObject(forKey: $0) }
+        ["pinSalt", "pinHash", "pinFailures", "pinLength"].forEach { d.removeObject(forKey: $0) }
     }
 
     static func verify(_ pin: String) -> Bool {
@@ -119,6 +126,10 @@ final class LockView: NSVisualEffectView, NSTextFieldDelegate {
     func controlTextDidChange(_ obj: Notification) {
         let digits = String(field.stringValue.filter { ("0"..."9").contains($0) }.prefix(10))
         if digits != field.stringValue { field.stringValue = digits }
+        // Like a phone passcode: check as soon as the last digit is typed (counts as an attempt)
+        if AppLock.pinLength > 0, digits.count == AppLock.pinLength {
+            DispatchQueue.main.async { [weak self] in self?.submit() }
+        }
     }
 
     @objc private func submit() {
@@ -126,6 +137,7 @@ final class LockView: NSVisualEffectView, NSTextFieldDelegate {
         guard !pin.isEmpty else { return }
         if AppLock.verify(pin) {
             AppLock.failures = 0
+            AppLock.pinLength = pin.count     // PINs set before 1.0.9 learn their length here
             field.stringValue = ""
             message.stringValue = ""
             onUnlock?()
