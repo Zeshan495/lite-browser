@@ -419,6 +419,12 @@ enum Prefs {
         }
     }
 
+    /// Show Google's suggestions while typing in the address bar.
+    static var searchSuggestions: Bool {
+        get { d.object(forKey: "searchSuggestions") as? Bool ?? true }
+        set { d.set(newValue, forKey: "searchSuggestions") }
+    }
+
     static var askDownloadLocation: Bool {
         get { d.bool(forKey: "askDownloadLocation") }
         set { d.set(newValue, forKey: "askDownloadLocation") }
@@ -924,19 +930,21 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, WKSc
             "isDefault": DefaultBrowser.isDefault,
             "downloadFolder": DownloadCenter.shared.folder.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"),
             "askDownload": Prefs.askDownloadLocation,
+            "suggestions": Prefs.searchSuggestions,
         ]
         let about: [String: Any] = [
             "version": AppInfo.version, "build": AppInfo.build, "webkit": AppInfo.webKitVersion,
             "macos": AppInfo.macOS, "repo": AppInfo.repository,
         ]
         let downloads = DownloadCenter.shared.settingsInfo()
+        let security: [String: Any] = ["enabled": AppLock.isEnabled, "lockOnWake": AppLock.lockOnWake]
         WKWebsiteDataStore.default().fetchDataRecords(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes()) { [weak self] records in
             guard let self = self else { return }
             let kept = Prefs.keptSites
             let domains = Set(records.map { $0.displayName }).sorted()
             let sites: [[String: Any]] = domains.map { ["domain": $0, "kept": SiteData.isKept($0, kept)] }
             let state: [String: Any] = [
-                "general": general, "about": about, "downloads": downloads,
+                "general": general, "about": about, "downloads": downloads, "security": security,
                 "history": history, "searches": searches, "sites": sites,
                 "dns": ["servers": Prefs.dnsServers, "presets": presets, "current": current],
             ]
@@ -1048,6 +1056,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, WKSc
             }
         case "setAsk":
             Prefs.askDownloadLocation = body["on"] as? Bool ?? false
+        case "setSuggestions":
+            Prefs.searchSuggestions = body["on"] as? Bool ?? true
         case "dlFolder":
             let panel = NSOpenPanel()
             panel.canChooseDirectories = true
@@ -1061,6 +1071,34 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, WKSc
                 if r == .OK, let u = panel.url { DownloadCenter.shared.folder = u; self?.toast("Downloads will be saved to “\(u.lastPathComponent)”.") }
                 self?.pushState()
             }
+
+        // PIN lock
+        case "pinEnable":
+            let pin = body["pin"] as? String ?? "", confirm = body["confirm"] as? String ?? ""
+            guard AppLock.isValidFormat(pin) else { toast("Use 4 to 10 digits (numbers only).", error: true); return }
+            guard pin == confirm else { toast("The two PINs don't match.", error: true); return }
+            AppLock.set(pin)
+            toast("PIN lock is on. LiteBrowser will ask for it every time it opens.")
+            pushState()
+        case "pinChange":
+            let current = body["current"] as? String ?? ""
+            let pin = body["pin"] as? String ?? "", confirm = body["confirm"] as? String ?? ""
+            guard AppLock.verify(current) else { toast("Your current PIN is wrong.", error: true); return }
+            guard AppLock.isValidFormat(pin) else { toast("Use 4 to 10 digits (numbers only).", error: true); return }
+            guard pin == confirm else { toast("The two new PINs don't match.", error: true); return }
+            AppLock.set(pin)
+            toast("PIN changed.")
+            pushState()
+        case "pinDisable":
+            guard AppLock.verify(body["current"] as? String ?? "") else { toast("Wrong PIN.", error: true); return }
+            AppLock.disable()
+            toast("PIN lock is off.")
+            pushState()
+        case "pinWake":
+            AppLock.lockOnWake = body["on"] as? Bool ?? true
+        case "pinLockNow":
+            closeAndReturn()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { app.lockNow(nil) }
 
         // Downloads
         case "dlAction":
@@ -1162,25 +1200,141 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var settings: SettingsWindowController?
     private var recentlyClosed: [URL] = []
     private var isClearingData = false
+
+    // PIN lock state
+    private(set) var isLocked = false
+    private var lockWindow: LockWindowController?
+    private var fullMenu: NSMenu?
+    private var pendingURLs: [URL] = []
+    private var hiddenWindows: [NSWindow] = []
+    private var launchArgs: [String] = []
     private let recentHistoryTag = 7700
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildMenu()
         removeOldExtensionData()
-        let args = CommandLine.arguments.dropFirst().filter { !$0.hasPrefix("-") }
-        DispatchQueue.main.async {
-            // If the app was launched by opening a link, application(_:open:) already made a window.
-            guard self.controllers.isEmpty else { return }
-            if let first = args.first { self.openWindow(url: resolveInput(first)); return }
-            if Prefs.startup == "restore", self.restoreSession() { return }
-            self.openWindow(url: Config.home)
+        launchArgs = CommandLine.arguments.dropFirst().filter { !$0.hasPrefix("-") }
+        let ws = NSWorkspace.shared.notificationCenter
+        ws.addObserver(self, selector: #selector(macDidWake), name: NSWorkspace.didWakeNotification, object: nil)
+        ws.addObserver(self, selector: #selector(macDidWake), name: NSWorkspace.screensDidWakeNotification, object: nil)
+        if AppLock.isEnabled {
+            showLock()                               // nothing loads until the PIN is entered
+        } else {
+            DispatchQueue.main.async { self.startBrowsing() }
         }
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    /// Opens the first window(s): a link, last session's tabs, or the home page.
+    private func startBrowsing() {
+        // If the app was launched by opening a link, application(_:open:) already made a window.
+        let urls = pendingURLs
+        pendingURLs.removeAll()
+        if !urls.isEmpty { urls.forEach { openInBrowser($0) }; return }
+        guard controllers.isEmpty else { return }
+        if let first = launchArgs.first { launchArgs.removeAll(); openWindow(url: resolveInput(first)); return }
+        if Prefs.startup == "restore", restoreSession() { return }
+        openWindow(url: Config.home)
+    }
+
+    // MARK: PIN lock
+
+    @objc private func macDidWake() {
+        if AppLock.isEnabled && AppLock.lockOnWake { lockNow(nil) }
+    }
+
+    /// Hides every window and asks for the PIN (menu: LiteBrowser › Lock, ⌃⌘L).
+    @objc func lockNow(_ sender: Any?) {
+        guard AppLock.isEnabled, !isLocked else { return }
+        saveSession()
+        settings?.window?.orderOut(nil)
+        hiddenWindows = NSApp.windows.filter { $0.isVisible && $0.windowController is BrowserWindowController }
+        hiddenWindows.forEach { $0.orderOut(nil) }
+        showLock()
+    }
+
+    private func showLock() {
+        isLocked = true
+        if fullMenu == nil { fullMenu = NSApp.mainMenu }
+        NSApp.mainMenu = lockedMenu()
+        let lw = lockWindow ?? LockWindowController()
+        lw.lockView.onUnlock = { [weak self] in self?.unlock() }
+        lw.lockView.onWipe = { [weak self] in self?.wipeAfterWrongPIN() }
+        lockWindow = lw
+        lw.present()
+    }
+
+    private func unlock() {
+        isLocked = false
+        lockWindow?.window?.orderOut(nil)
+        if let m = fullMenu { NSApp.mainMenu = m }
+        if hiddenWindows.isEmpty {
+            startBrowsing()
+        } else {
+            hiddenWindows.forEach { $0.makeKeyAndOrderFront(nil) }
+            hiddenWindows.removeAll()
+            let urls = pendingURLs
+            pendingURLs.removeAll()
+            urls.forEach { openInBrowser($0) }
+        }
+    }
+
+    /// Two wrong PINs: erase everything and start like the very first launch.
+    private func wipeAfterWrongPIN() {
+        lockWindow?.window?.orderOut(nil)
+        lockWindow = nil
+        hiddenWindows.removeAll()
+        pendingURLs.removeAll()
+        isLocked = false
+        if let m = fullMenu { NSApp.mainMenu = m }
+        factoryReset { [weak self] in self?.openWindow(url: Config.home) }
+    }
+
+    /// Erases history, searches, cookies and logins, site data, caches, the downloads list,
+    /// open tabs and every setting (including the PIN). Downloaded files are not touched.
+    func factoryReset(then done: @escaping () -> Void) {
+        isClearingData = true
+        settings?.window?.close()
+        settings = nil
+        controllers.forEach { $0.window?.close() }
+        recentlyClosed.removeAll()
+
+        HistoryStore.shared.clearHistory()
+        HistoryStore.shared.clearSearches()
+        DownloadCenter.shared.resetAll()
+        URLCache.shared.removeAllCachedResponses()
+        HTTPCookieStorage.shared.removeCookies(since: .distantPast)
+        if let id = Bundle.main.bundleIdentifier { UserDefaults.standard.removePersistentDomain(forName: id) }
+        UserDefaults.standard.synchronize()
+
+        WKWebsiteDataStore.default().removeData(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(),
+                                                modifiedSince: .distantPast) { [weak self] in
+            DispatchQueue.main.async {
+                self?.isClearingData = false
+                done()
+            }
+        }
+    }
+
+    private func lockedMenu() -> NSMenu {
+        let main = NSMenu()
+        let appItem = NSMenuItem()
+        let app = NSMenu(title: "LiteBrowser")
+        app.addItem(NSMenuItem(title: "Quit LiteBrowser", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        appItem.submenu = app
+        main.addItem(appItem)
+        let editItem = NSMenuItem()
+        let edit = NSMenu(title: "Edit")
+        edit.addItem(NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
+        edit.addItem(NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
+        editItem.submenu = edit
+        main.addItem(editItem)
+        return main
+    }
+
     // MARK: Session (reopen tabs from last time)
 
-    func applicationWillTerminate(_ notification: Notification) { saveSession() }
+    func applicationWillTerminate(_ notification: Notification) { if !isLocked { saveSession() } }
 
     private func saveSession() {
         let windows: [[String: Any]] = browserControllers.map { c in
@@ -1211,10 +1365,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
+        if isLocked || (AppLock.isEnabled && lockWindow == nil && controllers.isEmpty) {
+            pendingURLs += urls                    // opened after the PIN is entered
+            return
+        }
         urls.forEach { openInBrowser($0) }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if isLocked { lockWindow?.present(); return false }
         if !flag { openWindow(url: Config.home) }
         return true
     }
@@ -1495,6 +1654,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             item("Check for Updates…", #selector(showAbout(_:)), ""),
             .separator(),
             item("Settings…", #selector(showSettings(_:)), ","),
+            item("Lock LiteBrowser", #selector(lockNow(_:)), "l", [.command, .control]),
             .separator(),
             item("Hide LiteBrowser", #selector(NSApplication.hide(_:)), "h"),
             item("Hide Others", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option]),
@@ -1518,6 +1678,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             item("Copy", #selector(NSText.copy(_:)), "c"),
             item("Paste", #selector(NSText.paste(_:)), "v"),
             item("Select All", #selector(NSText.selectAll(_:)), "a"),
+            .separator(),
+            item("Find…", #selector(B.showFind(_:)), "f"),
+            item("Find Next", #selector(B.findNextMatch(_:)), "g"),
+            item("Find Previous", #selector(B.findPreviousMatch(_:)), "g", [.command, .shift]),
         ])
         menu("View", [
             item("Reload Page", #selector(B.reloadPage(_:)), "r"),

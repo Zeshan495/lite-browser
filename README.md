@@ -25,13 +25,25 @@ litebrowser
 
 ## Android app
 
+- Modern mobile layout: rounded address bar on top, and back, forward, home, tabs and menu at the bottom within thumb reach
+- Tab switcher with page previews, a menu sheet that slides up with an icon grid, a full-screen History page with search, and find in page
+
 - Same home page as the Mac app, with the clock, a search box and top sites
 - Tabs, history, search history, and clear browsing data
 - Smart error pages: works out whether your DNS, your network or the site is the problem, and opens Android's **Private DNS** setting when DNS is to blame (you can enter a hostname like `love.dns.zeshanhaider.dev` there)
 - Downloads, file uploads, full-screen video, desktop site mode, sharing
 - Can be set as your default browser
 
+## PIN lock (Mac and Android)
+
+Turn it on in **Settings → PIN Lock** on Mac, or **Menu → App lock** on Android. LiteBrowser then asks for a 4–10 digit PIN every time it opens. On Mac it also asks after the Mac wakes from sleep, or when you press ⌃⌘L. On Android it also asks when you come back after more than a minute away.
+
+**If a wrong PIN is entered 2 times in a row, LiteBrowser erases everything** (history, searches, sign-ins and cookies, site data, open tabs, the downloads list and all settings including the PIN) and starts fresh like a new install. Downloaded files are kept. The PIN is stored only as a salted PBKDF2 hash, and a forgotten PIN can't be recovered.
+
 ## Mac app
+
+- **Smart address bar:** shows Google suggestions and matching pages from your history as you type, and autocompletes sites you visit (type `git` → `github.com`). Use the arrow keys and Enter to pick one.
+- **Find on page:** ⌘F, with ⌘G / ⇧⌘G for next and previous
 
 ## Usage
 

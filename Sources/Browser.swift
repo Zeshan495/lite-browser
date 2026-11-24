@@ -846,6 +846,9 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate {
     private let omnibox = OmniboxView()
     private let lockIcon = NSImageView()
     private let webContainer = NSView()
+    private let findBar = FindBar()
+    private var findBarHeight: NSLayoutConstraint!
+    private var omniboxController: OmniboxController!
 
     init(url: URL?, configuration: WKWebViewConfiguration? = nil) {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1240, height: 820),
@@ -919,6 +922,12 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate {
         addressField.cell?.sendsActionOnEndEditing = false
         addressField.target = self
         addressField.action = #selector(addressEntered(_:))
+        omniboxController = OmniboxController(field: addressField, anchor: omnibox) { [weak self] url in
+            guard let self = self, let tab = self.activeTab else { return }
+            tab.load(url)
+            self.window?.makeFirstResponder(tab.webView)
+        }
+        addressField.delegate = omniboxController
         addressField.onFocusChange = { [weak self] focused in
             self?.omnibox.focused = focused
             if !focused { DispatchQueue.main.async { self?.refreshChrome() } }
@@ -957,7 +966,11 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate {
         ])
 
         let content = NSView()
-        for v in [tabStrip, toolbarRow, webContainer] as [NSView] {
+        findBar.isHidden = true
+        findBar.onFind = { [weak self] text, back in self?.runFind(text, backwards: back) }
+        findBar.onClose = { [weak self] in self?.hideFind(nil) }
+        findBarHeight = findBar.heightAnchor.constraint(equalToConstant: 0)
+        for v in [tabStrip, toolbarRow, findBar, webContainer] as [NSView] {
             v.translatesAutoresizingMaskIntoConstraints = false
             content.addSubview(v)
         }
@@ -970,7 +983,11 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate {
             toolbarRow.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             toolbarRow.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             toolbarRow.heightAnchor.constraint(equalToConstant: Self.toolbarHeight),
-            webContainer.topAnchor.constraint(equalTo: toolbarRow.bottomAnchor),
+            findBar.topAnchor.constraint(equalTo: toolbarRow.bottomAnchor),
+            findBar.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            findBar.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            findBarHeight,
+            webContainer.topAnchor.constraint(equalTo: findBar.bottomAnchor),
             webContainer.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             webContainer.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             webContainer.bottomAnchor.constraint(equalTo: content.bottomAnchor),
@@ -1113,6 +1130,41 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate {
     }
 
     // MARK: Actions (menu items reach these through the responder chain)
+
+    // MARK: Find on page
+
+    @objc func showFind(_ sender: Any?) {
+        findBar.isHidden = false
+        findBarHeight.constant = 40
+        window?.makeFirstResponder(findBar.field)
+        findBar.field.currentEditor()?.selectAll(nil)
+    }
+
+    @objc func hideFind(_ sender: Any?) {
+        findBar.isHidden = true
+        findBarHeight.constant = 0
+        activeTab?.webView.evaluateJavaScript("window.getSelection().removeAllRanges()", completionHandler: nil)
+        if let wv = activeTab?.webView { window?.makeFirstResponder(wv) }
+    }
+
+    @objc func findNextMatch(_ sender: Any?) {
+        if findBar.isHidden { showFind(nil) } else { runFind(findBar.field.stringValue, backwards: false) }
+    }
+
+    @objc func findPreviousMatch(_ sender: Any?) {
+        if findBar.isHidden { showFind(nil) } else { runFind(findBar.field.stringValue, backwards: true) }
+    }
+
+    private func runFind(_ text: String, backwards: Bool) {
+        guard let wv = activeTab?.webView, !text.isEmpty else { findBar.setResult(found: true); return }
+        let cfg = WKFindConfiguration()
+        cfg.backwards = backwards
+        cfg.caseSensitive = false
+        cfg.wraps = true
+        wv.find(text, configuration: cfg) { [weak self] result in
+            self?.findBar.setResult(found: result.matchFound)
+        }
+    }
 
     @objc func addressEntered(_ sender: NSTextField) {
         guard let tab = activeTab else { return }

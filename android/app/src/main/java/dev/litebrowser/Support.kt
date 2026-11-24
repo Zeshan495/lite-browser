@@ -280,3 +280,41 @@ object ErrorPage {
         """.trimIndent()
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// PIN lock: 2 wrong PINs in a row erase all browsing data (see MainActivity.factoryReset)
+// ---------------------------------------------------------------------------------------------
+
+object AppLock {
+    const val MAX_FAILURES = 2
+    private fun prefs(c: Context) = c.getSharedPreferences("litebrowser_lock", Context.MODE_PRIVATE)
+
+    fun isEnabled(c: Context) = prefs(c).getString("hash", null) != null
+    fun isValidFormat(pin: String) = pin.length in 4..10 && pin.all { it in '0'..'9' }
+
+    /** Wrong attempts in a row, written to disk immediately so closing the app doesn't reset it. */
+    fun failures(c: Context) = prefs(c).getInt("failures", 0)
+    fun setFailures(c: Context, n: Int) { prefs(c).edit().putInt("failures", n).commit() }
+
+    fun set(c: Context, pin: String) {
+        val salt = ByteArray(16).also { java.security.SecureRandom().nextBytes(it) }
+        val saltB64 = android.util.Base64.encodeToString(salt, android.util.Base64.NO_WRAP)
+        prefs(c).edit().putString("salt", saltB64).putString("hash", hash(pin, salt)).putInt("failures", 0).commit()
+    }
+
+    fun disable(c: Context) { prefs(c).edit().clear().commit() }
+
+    fun verify(c: Context, pin: String): Boolean {
+        val p = prefs(c)
+        val stored = p.getString("hash", null) ?: return false
+        val salt = android.util.Base64.decode(p.getString("salt", "") ?: "", android.util.Base64.NO_WRAP)
+        return java.security.MessageDigest.isEqual(hash(pin, salt).toByteArray(), stored.toByteArray())
+    }
+
+    /** PBKDF2, 60,000 rounds: slow to brute-force even if someone copies the app's files. */
+    private fun hash(pin: String, salt: ByteArray): String {
+        val spec = javax.crypto.spec.PBEKeySpec(pin.toCharArray(), salt, 60_000, 256)
+        val key = javax.crypto.SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1").generateSecret(spec).encoded
+        return android.util.Base64.encodeToString(key, android.util.Base64.NO_WRAP)
+    }
+}

@@ -105,6 +105,12 @@ table.details td:first-child{color:var(--muted);width:130px}
 .dl.gone .n{color:var(--muted);text-decoration:line-through}
 .update-ok{color:var(--ok);font-weight:600}
 .update-new{color:var(--accent);font-weight:600}
+.danger-card{border-color:rgba(220,38,38,.35);background:rgba(220,38,38,.06)}
+.pinrow{display:flex;align-items:center;gap:12px;margin:8px 0}
+.pinrow label{width:130px;color:var(--muted)}
+.pinrow input{font:inherit;font-size:16px;letter-spacing:.3em;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:7px;padding:7px 10px;width:200px;outline:none;-webkit-user-select:text;user-select:text}
+.pinrow input::placeholder{letter-spacing:normal}
+.pinrow input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.2)}
 #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(80px);background:#111;color:#fff;padding:9px 16px;border-radius:8px;transition:transform .25s;font-size:13px;max-width:80%}
 #toast.show{transform:translateX(-50%) translateY(0)}
 #toast.err{background:var(--danger)}
@@ -118,6 +124,7 @@ table.details td:first-child{color:var(--muted);width:130px}
   <button data-tab="searches"><span class="ico">🔍</span>Searches</button>
   <button data-tab="downloads"><span class="ico">⬇️</span>Downloads</button>
   <button data-tab="privacy"><span class="ico">🧹</span>Clear Data</button>
+  <button data-tab="security"><span class="ico">🔒</span>PIN Lock</button>
   <button data-tab="dns"><span class="ico">🌐</span>DNS</button>
   <button data-tab="about"><span class="ico">ℹ️</span>About</button>
   <button class="back" data-act="close">← Back to browsing</button>
@@ -134,6 +141,10 @@ table.details td:first-child{color:var(--muted);width:130px}
       <span id="defaultStatus" style="flex:1"></span>
       <button class="btn primary" data-act="make-default" id="makeDefaultBtn">Make Default</button>
     </div>
+  </div>
+  <div class="card">
+    <h2>Address bar</h2>
+    <label class="check"><input type="checkbox" id="suggestions"><span>Show search suggestions while typing<small>What you type is sent to Google to suggest searches, like in Chrome. Matches from your history always show.</small></span></label>
   </div>
   <div class="card">
     <h2>On startup</h2>
@@ -212,6 +223,42 @@ table.details td:first-child{color:var(--muted);width:130px}
   <div class="bar">
     <button class="btn danger" id="clearBtn" data-act="clear-now">Clear Now</button>
     <span class="summary" id="clearSummary"></span>
+  </div>
+</section>
+
+<section id="security">
+  <h1>PIN Lock</h1>
+  <p class="sub">Ask for a PIN every time LiteBrowser opens.</p>
+  <div class="card danger-card">
+    <h2>⚠️ How it protects you</h2>
+    <p style="margin:0">If a wrong PIN is entered <b>2 times in a row</b>, LiteBrowser <b>erases everything</b>: history, searches, sign-ins and cookies for every site, saved site data, open tabs, the downloads list and all settings (including the PIN). It then starts fresh, as if opened for the first time.</p>
+    <p class="note" style="margin-bottom:0">Downloaded files stay in your Downloads folder. A forgotten PIN can't be recovered.</p>
+  </div>
+  <div class="card" id="pinOff">
+    <h2>Turn on PIN lock</h2>
+    <div class="pinrow"><label>New PIN</label><input type="password" inputmode="numeric" maxlength="10" id="pinNew" placeholder="4–10 digits" autocomplete="off"></div>
+    <div class="pinrow"><label>Confirm PIN</label><input type="password" inputmode="numeric" maxlength="10" id="pinConfirm" placeholder="Type it again" autocomplete="off"></div>
+    <div class="bar" style="margin:12px 0 0"><button class="btn primary" data-act="pin-enable">Turn On PIN Lock</button></div>
+  </div>
+  <div id="pinOn" hidden>
+    <div class="card">
+      <h2>PIN lock is on</h2>
+      <p style="margin:0 0 10px">LiteBrowser asks for your PIN when it opens<span id="wakeNote">, and after your Mac wakes from sleep</span>.</p>
+      <label class="check"><input type="checkbox" id="pinWake"><span>Lock when the Mac wakes from sleep</span></label>
+      <div class="bar" style="margin:10px 0 0"><button class="btn primary" data-act="pin-locknow">Lock Now</button><span class="note" style="margin:0">Shortcut: ⌃⌘L</span></div>
+    </div>
+    <div class="card">
+      <h2>Change PIN</h2>
+      <div class="pinrow"><label>Current PIN</label><input type="password" inputmode="numeric" maxlength="10" id="pinCur1" autocomplete="off"></div>
+      <div class="pinrow"><label>New PIN</label><input type="password" inputmode="numeric" maxlength="10" id="pinNew2" placeholder="4–10 digits" autocomplete="off"></div>
+      <div class="pinrow"><label>Confirm new PIN</label><input type="password" inputmode="numeric" maxlength="10" id="pinConfirm2" autocomplete="off"></div>
+      <div class="bar" style="margin:12px 0 0"><button class="btn" data-act="pin-change">Change PIN</button></div>
+    </div>
+    <div class="card">
+      <h2>Turn off PIN lock</h2>
+      <div class="pinrow"><label>Current PIN</label><input type="password" inputmode="numeric" maxlength="10" id="pinCur2" autocomplete="off"></div>
+      <div class="bar" style="margin:12px 0 0"><button class="btn ghost-danger" data-act="pin-disable">Turn Off</button></div>
+    </div>
   </div>
 </section>
 
@@ -301,7 +348,7 @@ function showTab(t) {
 
 function render(state) {
   Object.assign(S, state);
-  renderGeneral(); renderDownloads(); renderAbout();
+  renderGeneral(); renderDownloads(); renderAbout(); renderSecurity();
   renderHistory(); renderSearches(); renderSites(); renderDNS();
 }
 
@@ -403,6 +450,7 @@ function renderGeneral() {
   if (document.activeElement !== $('#homeCustom')) $('#homeCustom').value = g.homeCustom || '';
   $('#dlFolder').textContent = g.downloadFolder;
   $('#askDownload').checked = !!g.askDownload;
+  $('#suggestions').checked = g.suggestions !== false;
 }
 
 const fileIcon = name => {
@@ -442,6 +490,15 @@ function renderDownloads() {
   $('#dlList').innerHTML = html
     ? `<div class="list">${html}</div>`
     : `<div class="empty">${f ? 'No downloads match.' : 'No downloads yet. Files you download will appear here.'}</div>`;
+}
+
+function renderSecurity() {
+  const sec = S.security || {};
+  $('#pinOff').hidden = !!sec.enabled;
+  $('#pinOn').hidden = !sec.enabled;
+  $('#pinWake').checked = sec.lockOnWake !== false;
+  $('#wakeNote').hidden = sec.lockOnWake === false;
+  ['pinNew','pinConfirm','pinCur1','pinNew2','pinConfirm2','pinCur2'].forEach(id => $('#' + id).value = '');
 }
 
 function updateDownloads(list) { S.downloads = list; renderDownloads(); }
@@ -521,6 +578,10 @@ document.addEventListener('click', e => {
     case 'dns-reset': return send('resetDNS');
     case 'close': return send('close');
     case 'make-default': return send('makeDefault');
+    case 'pin-enable': return send('pinEnable', { pin: $('#pinNew').value, confirm: $('#pinConfirm').value });
+    case 'pin-change': return send('pinChange', { current: $('#pinCur1').value, pin: $('#pinNew2').value, confirm: $('#pinConfirm2').value });
+    case 'pin-disable': return send('pinDisable', { current: $('#pinCur2').value });
+    case 'pin-locknow': return send('pinLockNow');
     case 'save-home': return send('setHome', { mode: 'custom', url: $('#homeCustom').value });
     case 'dl-folder': return send('dlFolder');
     case 'dl-open-folder': return send('dlOpenFolder');
@@ -552,11 +613,15 @@ document.addEventListener('change', e => {
     send('setHome', { mode: e.target.value, url: $('#homeCustom').value });
   }
   if (e.target.id === 'askDownload') send('setAsk', { on: e.target.checked });
+  if (e.target.id === 'suggestions') send('setSuggestions', { on: e.target.checked });
+  if (e.target.id === 'pinWake') send('pinWake', { on: e.target.checked });
 });
 $('#hq').addEventListener('input', renderHistory);
 $('#sq').addEventListener('input', renderSearches);
 $('#siteq').addEventListener('input', renderSites);
 $('#dq').addEventListener('input', renderDownloads);
+// PIN boxes: digits only
+document.querySelectorAll('.pinrow input').forEach(i => i.addEventListener('input', () => { i.value = i.value.replace(/\D/g, '').slice(0, 10); }));
 $('#homeCustom').addEventListener('keydown', e => {
   if (e.key === 'Enter') { document.querySelector('input[name=home][value=custom]').checked = true; send('setHome', { mode: 'custom', url: $('#homeCustom').value }); }
 });

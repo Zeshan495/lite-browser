@@ -261,6 +261,14 @@ final class DownloadCenter: NSObject, WKDownloadDelegate {
         if let d = it.destination { NSWorkspace.shared.open(d) }
     }
 
+    /// Used by the PIN wipe: stops downloads and forgets the whole list (files stay on disk).
+    func resetAll() {
+        items.filter { $0.state == .running }.forEach { $0.download?.cancel { _ in } }
+        items.removeAll()
+        try? FileManager.default.removeItem(at: store)
+        changed()
+    }
+
     func clearFinished() {
         items.removeAll { $0.state != .running }
         save()
