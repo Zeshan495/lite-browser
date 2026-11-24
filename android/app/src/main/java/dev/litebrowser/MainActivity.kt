@@ -68,6 +68,8 @@ import android.widget.TextView
 import android.widget.Toast
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.UUID
 import kotlin.concurrent.thread
 
@@ -147,6 +149,157 @@ class MainActivity : Activity() {
         applyRecentsPrivacy()
         if (AppLock.isEnabled(this)) showLock { newTab(start) }   // nothing loads until the PIN is right
         else newTab(start)
+        main.postDelayed({ if (lockView == null) checkForUpdate(manual = false) }, 4000)
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // In-app updates (from GitHub Releases)
+    // -----------------------------------------------------------------------------------------
+
+    private val currentVersion: String
+        get() = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull() ?: "0"
+    private var pendingApk: File? = null
+
+    private fun isNewer(a: String, b: String): Boolean {
+        val x = a.split('.').map { it.toIntOrNull() ?: 0 }
+        val y = b.split('.').map { it.toIntOrNull() ?: 0 }
+        for (i in 0 until maxOf(x.size, y.size)) {
+            val d = x.getOrElse(i) { 0 } - y.getOrElse(i) { 0 }
+            if (d != 0) return d > 0
+        }
+        return false
+    }
+
+    /** Looks for a newer release. Automatic checks happen at most once a day. */
+    private fun checkForUpdate(manual: Boolean) {
+        val now = System.currentTimeMillis()
+        if (!manual) {
+            if (now - prefs.getLong("lastUpdateCheck", 0) < 24 * 3600_000L) return
+            prefs.edit().putLong("lastUpdateCheck", now).apply()
+        }
+        val repo = getString(R.string.update_repo)
+        thread {
+            val result = runCatching {
+                val c = URL("https://api.github.com/repos/$repo/releases/latest").openConnection() as HttpURLConnection
+                c.connectTimeout = 10_000
+                c.readTimeout = 10_000
+                c.setRequestProperty("Accept", "application/vnd.github+json")
+                val json = JSONObject(c.inputStream.bufferedReader().use { it.readText() })
+                val tag = json.getString("tag_name").removePrefix("v")
+                var apk: String? = null
+                val assets = json.optJSONArray("assets") ?: JSONArray()
+                for (i in 0 until assets.length()) {
+                    val a = assets.getJSONObject(i)
+                    if (a.optString("name").endsWith(".apk")) apk = a.optString("browser_download_url")
+                }
+                tag to apk
+            }
+            main.post {
+                result.onSuccess { (tag, apk) ->
+                    if (apk != null && isNewer(tag, currentVersion)) {
+                        if (!manual && prefs.getString("skippedUpdate", "") == tag) return@onSuccess
+                        AlertDialog.Builder(this)
+                            .setTitle("Update available")
+                            .setMessage("LiteBrowser $tag is ready (you have $currentVersion). It downloads inside the app and keeps your history and logins.")
+                            .setPositiveButton("Update now") { _, _ -> downloadUpdate(tag, apk) }
+                            .setNegativeButton("Later") { _, _ -> if (!manual) prefs.edit().putString("skippedUpdate", tag).apply() }
+                            .show()
+                    } else if (manual) {
+                        AlertDialog.Builder(this).setTitle("You're up to date")
+                            .setMessage("LiteBrowser $currentVersion is the newest version.")
+                            .setPositiveButton("OK", null).show()
+                    }
+                }.onFailure { if (manual) toast("Couldn't check for updates. Check your connection.") }
+            }
+        }
+    }
+
+    /** Downloads the new APK with a progress bar, then opens the installer. */
+    private fun downloadUpdate(version: String, url: String) {
+        var cancelled = false
+        val bar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100; isIndeterminate = true }
+        val status = label("Starting download…", 13f, mutedColor).apply { setPadding(0, dp(8), 0, 0) }
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(24), dp(12), dp(24), 0)
+            addView(bar)
+            addView(status)
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Downloading LiteBrowser $version")
+            .setView(box)
+            .setCancelable(false)
+            .setNegativeButton("Cancel") { _, _ -> cancelled = true }
+            .show()
+        thread {
+            try {
+                val dir = File(cacheDir, "updates").apply { mkdirs(); listFiles()?.forEach { it.delete() } }
+                val out = File(dir, "LiteBrowser-$version.apk")
+                val c = URL(url).openConnection() as HttpURLConnection
+                c.instanceFollowRedirects = true
+                c.connectTimeout = 15_000
+                c.readTimeout = 30_000
+                val total = c.contentLengthLong
+                var done = 0L
+                var lastShown = 0L
+                c.inputStream.use { input ->
+                    out.outputStream().use { output ->
+                        val buf = ByteArray(64 * 1024)
+                        while (true) {
+                            if (cancelled) throw InterruptedException("cancelled")
+                            val n = input.read(buf)
+                            if (n < 0) break
+                            output.write(buf, 0, n)
+                            done += n
+                            if (done - lastShown > 128 * 1024) {
+                                lastShown = done
+                                val d = done
+                                main.post {
+                                    if (total > 0) { bar.isIndeterminate = false; bar.progress = (d * 100 / total).toInt() }
+                                    status.text = if (total > 0) "%.1f MB of %.1f MB".format(d / 1e6, total / 1e6) else "%.1f MB".format(d / 1e6)
+                                }
+                            }
+                        }
+                    }
+                }
+                main.post { dialog.dismiss(); installApk(out) }
+            } catch (e: Exception) {
+                main.post {
+                    dialog.dismiss()
+                    if (!cancelled) toast("Update download failed: ${e.message}")
+                }
+            }
+        }
+    }
+
+    private fun installApk(file: File) {
+        if (Build.VERSION.SDK_INT >= 26 && !packageManager.canRequestPackageInstalls()) {
+            pendingApk = file
+            AlertDialog.Builder(this)
+                .setTitle("One-time permission")
+                .setMessage("To install updates, allow LiteBrowser to install apps: turn on “Allow from this source”, then come back. The update continues by itself.")
+                .setPositiveButton("Open settings") { _, _ ->
+                    try { startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName"))) }
+                    catch (_: Exception) { startActivity(Intent(Settings.ACTION_SECURITY_SETTINGS)) }
+                }
+                .setNegativeButton("Cancel") { _, _ -> pendingApk = null }
+                .show()
+            return
+        }
+        val uri = Uri.parse("content://dev.litebrowser.updates/${file.name}")
+        val intent = Intent(Intent.ACTION_VIEW)
+            .setDataAndType(uri, "application/vnd.android.package-archive")
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        try { startActivity(intent) } catch (_: Exception) { toast("Couldn't open the installer") }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val apk = pendingApk ?: return
+        if (Build.VERSION.SDK_INT < 26 || packageManager.canRequestPackageInstalls()) {
+            pendingApk = null
+            installApk(apk)
+        }
     }
 
     override fun onStop() {
@@ -1425,11 +1578,11 @@ class MainActivity : Activity() {
     }
 
     private fun showAbout() {
-        val version = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull() ?: ""
         AlertDialog.Builder(this)
-            .setTitle("LiteBrowser $version")
-            .setMessage("A small, fast browser with Google search, top sites and smart DNS error checks.\n\nYour history stays on this phone.")
-            .setPositiveButton("OK", null)
+            .setTitle("LiteBrowser $currentVersion")
+            .setMessage("A small, fast browser with Google search, top sites, PIN lock and smart DNS error checks.\n\nYour history stays on this phone.")
+            .setPositiveButton("Check for updates") { _, _ -> checkForUpdate(manual = true) }
+            .setNegativeButton("Close", null)
             .show()
     }
 

@@ -17,6 +17,8 @@ android {
         targetSdk = 35
         versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
         versionName = System.getenv("VERSION_NAME") ?: "1.0.0"
+        // In-app updates check this repository's GitHub Releases
+        resValue("string", "update_repo", System.getenv("GITHUB_REPOSITORY") ?: "Zeshan495/lite-browser")
     }
 
     signingConfigs {
@@ -39,6 +41,8 @@ android {
                             else signingConfigs.getByName("debug")
         }
     }
+
+    buildFeatures { resValues = true }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

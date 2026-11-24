@@ -975,6 +975,12 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, WKSc
         return result.entries?.map { $0.display }
     }
 
+    private func sendUpdate(_ info: [String: Any]) {
+        if let d = try? JSONSerialization.data(withJSONObject: info), let j = String(data: d, encoding: .utf8) {
+            js("updateResult(\(j))")
+        }
+    }
+
     /// Sends just the downloads list (used for live progress while Settings is open).
     @objc private func pushDownloads() {
         guard loaded, window?.isVisible == true,
@@ -1136,23 +1142,32 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, WKSc
 
         // About
         case "checkUpdates":
-            AppInfo.checkForUpdates { [weak self] result in
+            js("updateResult({state:'checking'})")
+            Updater.shared.check { [weak self] result in
                 guard let self = self else { return }
-                var info: [String: Any] = ["current": AppInfo.version]
+                var info: [String: Any] = ["current": AppInfo.version, "homebrew": Updater.shared.isHomebrew]
                 switch result {
-                case .success(let (latest, page)):
-                    let newer = latest.compare(AppInfo.version, options: .numeric) == .orderedDescending
-                    info["state"] = newer ? "available" : "latest"
-                    info["latest"] = latest
-                    info["url"] = page.absoluteString
+                case .success(let rel?):
+                    info["state"] = "available"; info["latest"] = rel.version; info["url"] = rel.page.absoluteString
+                case .success(nil):
+                    info["state"] = "latest"
                 case .failure(let e):
-                    info["state"] = "error"
-                    info["error"] = e.localizedDescription
+                    info["state"] = "error"; info["error"] = e.localizedDescription
                 }
-                if let d = try? JSONSerialization.data(withJSONObject: info), let j = String(data: d, encoding: .utf8) {
-                    self.js("updateResult(\(j))")
+                self.sendUpdate(info)
+            }
+        case "installUpdate":
+            Updater.shared.onProgress = { [weak self] phase in
+                switch phase {
+                case .working(let line): self?.sendUpdate(["state": "working", "line": line])
+                case .ready: self?.sendUpdate(["state": "ready", "latest": Updater.shared.available?.version ?? ""])
+                case .failed(let msg): self?.sendUpdate(["state": "error", "error": msg])
+                case .idle: break
                 }
             }
+            Updater.shared.install()
+        case "restartUpdate":
+            Updater.shared.relaunch()
         case "openLink":
             let base = AppInfo.repoURL.absoluteString
             let map = ["repo": base, "releases": base + "/releases", "issues": base + "/issues/new",
@@ -1184,6 +1199,14 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate, WKSc
     func windowDidBecomeKey(_ notification: Notification) { pushState() }
 
     func refresh() { pushState() }
+
+    /// If a newer version is already known, show "Update Now" on the About page.
+    func showKnownUpdate() {
+        guard let rel = Updater.shared.available else { return }
+        if case .working = Updater.shared.phase { return }
+        sendUpdate(["state": "available", "latest": rel.version, "current": AppInfo.version,
+                    "url": rel.page.absoluteString, "homebrew": Updater.shared.isHomebrew])
+    }
 
     /// ⌘W ("Close Tab") closes Settings when it's in front.
     @objc func closeCurrentTab(_ sender: Any?) { closeAndReturn() }
@@ -1241,13 +1264,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     /// Opens the first window(s): a link, last session's tabs, or the home page.
     private func startBrowsing() {
+        defer { Updater.shared.checkInBackground() }
         // If the app was launched by opening a link, application(_:open:) already made a window.
         let urls = pendingURLs
         pendingURLs.removeAll()
         if !urls.isEmpty { urls.forEach { openInBrowser($0) }; return }
         guard controllers.isEmpty else { return }
         if let first = launchArgs.first { launchArgs.removeAll(); openWindow(url: resolveInput(first)); return }
-        if Prefs.startup == "restore", restoreSession() { return }
+        let afterUpdate = UserDefaults.standard.bool(forKey: "restoreAfterUpdate")
+        UserDefaults.standard.removeObject(forKey: "restoreAfterUpdate")
+        if Prefs.startup == "restore" || afterUpdate, restoreSession() { return }
         openWindow(url: Config.home)
     }
 
@@ -1255,6 +1281,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func macDidWake() {
         if AppLock.isEnabled && AppLock.lockOnWake { lockNow(nil) }
+        Updater.shared.checkInBackground()
     }
 
     /// Hides every window and asks for the PIN (menu: LiteBrowser › Lock, ⌃⌘L).
@@ -1506,7 +1533,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc func showSettings(_ sender: Any?) { openSettings("general") }
-    @objc func showAbout(_ sender: Any?) { openSettings("about") }
+    @objc func showAbout(_ sender: Any?) {
+        openSettings("about")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in self?.settings?.showKnownUpdate() }
+    }
     @objc func showAllDownloads(_ sender: Any?) { openSettings("downloads") }
     @objc func showHistory(_ sender: Any?) { openSettings("history") }
     @objc func showSearches(_ sender: Any?) { openSettings("searches") }

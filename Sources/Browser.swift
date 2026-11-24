@@ -841,6 +841,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate {
     private let reloadButton = HoverButton(symbol: "arrow.clockwise", tip: "Reload", target: nil, action: nil)
     private let homeButton = HoverButton(symbol: "house", tip: "Home", target: nil, action: nil)
     private let settingsButton = HoverButton(symbol: "gearshape", tip: "Settings", target: nil, action: nil)
+    private let updateButton = NSButton(title: "Update", target: nil, action: nil)
     private let downloadsButton = DownloadsButton(symbol: "arrow.down.circle", tip: "Downloads (⌥⌘L)", target: nil, action: nil)
     private var downloadsPopover: NSPopover?
     private let addressField = AddressField()
@@ -867,11 +868,22 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate {
         addTab(url: url, configuration: configuration, activate: true)
         NotificationCenter.default.addObserver(self, selector: #selector(downloadsChanged),
                                                name: .liteDownloadsChanged, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(updateAvailable),
+                                               name: .liteUpdateAvailable, object: nil)
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
 
     deinit { NotificationCenter.default.removeObserver(self) }
+
+    // MARK: Updates
+
+    @objc private func updateAvailable() {
+        updateButton.isHidden = Updater.shared.available == nil
+        if let v = Updater.shared.available?.version { updateButton.toolTip = "LiteBrowser \(v) is available. Click to update." }
+    }
+
+    @objc private func updateClicked(_ sender: Any?) { AppDelegate.shared.showAbout(nil) }
 
     // MARK: Downloads
 
@@ -951,7 +963,16 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate {
         ])
 
         downloadsButton.isHidden = DownloadCenter.shared.items.isEmpty
-        let row = NSStackView(views: [backButton, forwardButton, reloadButton, homeButton, omnibox, downloadsButton, settingsButton])
+        updateButton.bezelStyle = .rounded
+        updateButton.controlSize = .small
+        updateButton.bezelColor = .controlAccentColor
+        updateButton.contentTintColor = .white
+        updateButton.font = .systemFont(ofSize: 12, weight: .semibold)
+        updateButton.toolTip = "A new version of LiteBrowser is available"
+        updateButton.target = self
+        updateButton.action = #selector(updateClicked(_:))
+        updateButton.isHidden = Updater.shared.available == nil
+        let row = NSStackView(views: [backButton, forwardButton, reloadButton, homeButton, omnibox, updateButton, downloadsButton, settingsButton])
         row.orientation = .horizontal
         row.spacing = 2
         row.setCustomSpacing(10, after: homeButton)

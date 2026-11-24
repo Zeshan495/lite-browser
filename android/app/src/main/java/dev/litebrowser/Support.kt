@@ -333,3 +333,34 @@ object AppLock {
         return android.util.Base64.encodeToString(key, android.util.Base64.NO_WRAP)
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Serves a downloaded update APK to Android's package installer (no AndroidX needed)
+// ---------------------------------------------------------------------------------------------
+
+class UpdateProvider : android.content.ContentProvider() {
+    override fun onCreate() = true
+
+    private fun file(uri: Uri): java.io.File? {
+        val name = uri.lastPathSegment ?: return null
+        if (name.contains('/') || !name.endsWith(".apk")) return null
+        val f = java.io.File(java.io.File(context!!.cacheDir, "updates"), name)
+        return if (f.exists()) f else null
+    }
+
+    override fun openFile(uri: Uri, mode: String): android.os.ParcelFileDescriptor? =
+        file(uri)?.let { android.os.ParcelFileDescriptor.open(it, android.os.ParcelFileDescriptor.MODE_READ_ONLY) }
+
+    override fun getType(uri: Uri): String = "application/vnd.android.package-archive"
+
+    override fun query(uri: Uri, projection: Array<out String>?, selection: String?,
+                       selectionArgs: Array<out String>?, sortOrder: String?): android.database.Cursor? {
+        val f = file(uri) ?: return null
+        val cols = arrayOf(android.provider.OpenableColumns.DISPLAY_NAME, android.provider.OpenableColumns.SIZE)
+        return android.database.MatrixCursor(cols).apply { addRow(arrayOf<Any>(f.name, f.length())) }
+    }
+
+    override fun insert(uri: Uri, values: android.content.ContentValues?): Uri? = null
+    override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?) = 0
+    override fun update(uri: Uri, values: android.content.ContentValues?, selection: String?, selectionArgs: Array<out String>?) = 0
+}

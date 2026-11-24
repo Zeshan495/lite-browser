@@ -111,6 +111,9 @@ table.details td:first-child{color:var(--muted);width:130px}
 .pinrow input{font:inherit;font-size:16px;letter-spacing:.3em;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:7px;padding:7px 10px;width:200px;outline:none;-webkit-user-select:text;user-select:text}
 .pinrow input::placeholder{letter-spacing:normal}
 .pinrow input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.2)}
+.upd-work{display:flex;align-items:center;gap:10px;color:var(--muted)}
+.spin{width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;flex:none}
+@keyframes spin{to{transform:rotate(360deg)}}
 #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(80px);background:#111;color:#fff;padding:9px 16px;border-radius:8px;transition:transform .25s;font-size:13px;max-width:80%}
 #toast.show{transform:translateX(-50%) translateY(0)}
 #toast.err{background:var(--danger)}
@@ -514,10 +517,17 @@ function renderAbout() {
 
 function updateResult(r) {
   const el = $('#updateStatus');
+  if (r.state === 'checking') { el.textContent = 'Checking for updates…'; return; }
   if (r.state === 'latest') el.innerHTML = `<span class="update-ok">✓ You're up to date.</span> LiteBrowser ${esc(r.current)} is the newest version.`;
-  else if (r.state === 'available') el.innerHTML = `<span class="update-new">LiteBrowser ${esc(r.latest)} is available</span> (you have ${esc(r.current)}).<br>
-      Update in Terminal: <span class="mono">brew upgrade lite-browser</span> <button class="btn small" data-act="copy-brew">Copy</button>`;
-  else el.innerHTML = `<span style="color:var(--danger)">Couldn't check for updates:</span> ${esc(r.error || 'unknown error')}`;
+  else if (r.state === 'available') el.innerHTML = `<span class="update-new">LiteBrowser ${esc(r.latest)} is available</span> (you have ${esc(r.current)}).
+      <div class="bar" style="margin:10px 0 0"><button class="btn primary" data-act="install-update">Update Now</button></div>
+      <p class="note" style="margin-bottom:0">${r.homebrew ? 'Updates through Homebrew. Takes about a minute.' : 'Downloads the new version and replaces this one.'}</p>`;
+  else if (r.state === 'working') el.innerHTML = `<div class="upd-work"><span class="spin"></span><span>${esc(r.line || 'Updating…')}</span></div>`;
+  else if (r.state === 'ready') el.innerHTML = `<span class="update-ok">✓ LiteBrowser ${esc(r.latest)} is installed.</span>
+      <div class="bar" style="margin:10px 0 0"><button class="btn primary" data-act="restart-update">Restart LiteBrowser</button></div>
+      <p class="note" style="margin-bottom:0">Your tabs will reopen after the restart.</p>`;
+  else el.innerHTML = `<span style="color:var(--danger)">Update failed:</span> ${esc(r.error || 'unknown error')}
+      <div class="bar" style="margin:10px 0 0"><button class="btn" data-link="releases">Open Release Page</button></div>`;
 }
 
 let toastTimer;
@@ -586,8 +596,10 @@ document.addEventListener('click', e => {
     case 'dl-folder': return send('dlFolder');
     case 'dl-open-folder': return send('dlOpenFolder');
     case 'dl-clear': return send('dlClear');
-    case 'check-updates': $('#updateStatus').textContent = 'Checking…'; return send('checkUpdates');
+    case 'check-updates': return send('checkUpdates');
     case 'copy-brew': return send('copy', { text: 'brew upgrade lite-browser' });
+    case 'install-update': return send('installUpdate');
+    case 'restart-update': return send('restartUpdate');
     case 'copy-details': {
       const a = S.about || {};
       return send('copy', { text: `LiteBrowser ${a.version} (build ${a.build})\nWebKit ${a.webkit}\n${a.macos}` });

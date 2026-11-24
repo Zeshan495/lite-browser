@@ -4,6 +4,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    <!-- In-app updates: lets LiteBrowser open Android's installer for a new APK it downloaded -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:label="LiteBrowser"
@@ -37,5 +39,11 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+        <!-- Shares a downloaded update APK with Android's installer -->
+        <provider
+            android:name=".UpdateProvider"
+            android:authorities="dev.litebrowser.updates"
+            android:exported="false"
+            android:grantUriPermissions="true" />
     </application>
 </manifest>
