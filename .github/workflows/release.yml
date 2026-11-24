@@ -91,7 +91,9 @@ jobs:
 
   release:
     name: Publish release
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Publish even if GitHub has no Mac runner free: the APK and the Homebrew formula
+    # (which builds from source on your Mac) don't need it. The Mac zip is added when it built.
+    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/v') && needs.android.result == 'success' }}
     needs: [android, macos]
     runs-on: ubuntu-latest
     steps:
