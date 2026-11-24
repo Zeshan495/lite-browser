@@ -59,3 +59,8 @@ val syncWebAssets by tasks.registering(Copy::class) {
 }
 android.sourceSets["main"].assets.srcDir(webAssets)
 tasks.named("preBuild") { dependsOn(syncWebAssets) }
+
+dependencies {
+    // Passkeys: lets the WebView use Android's Credential Manager for any site (browser mode)
+    implementation("androidx.webkit:webkit:1.14.0")
+}

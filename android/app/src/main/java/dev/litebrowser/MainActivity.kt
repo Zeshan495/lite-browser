@@ -724,6 +724,20 @@ class MainActivity : Activity() {
     // Tabs
     // -----------------------------------------------------------------------------------------
 
+    /**
+     * Passkeys and security keys: sites can ask for a passkey, and Android shows its own sheet
+     * (this phone's passkeys, a password manager, or "use another device" with a QR code).
+     * Needs an up-to-date Android System WebView; quietly does nothing on older ones.
+     */
+    private fun enablePasskeys(wv: WebView) {
+        try {
+            if (androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.WEB_AUTHENTICATION)) {
+                androidx.webkit.WebSettingsCompat.setWebAuthenticationSupport(
+                    wv.settings, androidx.webkit.WebSettingsCompat.WEB_AUTHENTICATION_SUPPORT_FOR_BROWSER)
+            }
+        } catch (_: Throwable) { }
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     private fun newTab(url: String?, activate: Boolean = true, popup: Message? = null): Tab {
         val tab = Tab()
@@ -741,6 +755,7 @@ class MainActivity : Activity() {
             mediaPlaybackRequiresUserGesture = true
             if (desktopMode) userAgentString = DESKTOP_UA
         }
+        enablePasskeys(wv)
         CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
         wv.addJavascriptInterface(Bridge(tab), "LiteAndroid")
         wv.webViewClient = TabClient(tab)
