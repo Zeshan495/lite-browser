@@ -1243,6 +1243,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // recently visited pages are inserted here
             .separator(),
             item("Show All History", #selector(showHistory(_:)), "y"),
+            item("Downloads", #selector(B.showDownloads(_:)), "l", [.command, .option]),
             item("Show Search History", #selector(showSearches(_:)), "y", [.command, .shift]),
             item("Clear Browsing Data…", #selector(clearBrowsingData(_:)), "\u{8}", [.command, .shift]),
         ])

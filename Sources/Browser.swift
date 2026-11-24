@@ -408,7 +408,7 @@ final class TabStripView: NSView {
 
 // MARK: - Browser tab (one web page)
 
-final class BrowserTab: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler, WKDownloadDelegate {
+final class BrowserTab: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
     let webView: WKWebView
     weak var owner: BrowserWindowController?
     private(set) var favicon: NSImage?
@@ -725,7 +725,12 @@ final class BrowserTab: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMe
 
     func webView(_ webView: WKWebView, decidePolicyFor response: WKNavigationResponse,
                  decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
-        decisionHandler(response.canShowMIMEType ? .allow : .download)
+        // Download when the server says "attachment" (even for PDFs, CSVs, images…) or WebKit can't show it.
+        let disposition = (response.response as? HTTPURLResponse)?
+            .value(forHTTPHeaderField: "Content-Disposition")?.lowercased() ?? ""
+        let isAttachment = disposition.hasPrefix("attachment")
+        decisionHandler(response.isForMainFrame && (isAttachment || !response.canShowMIMEType) ? .download
+                        : (response.canShowMIMEType ? .allow : .download))
     }
 
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
@@ -755,31 +760,21 @@ final class BrowserTab: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMe
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { webView.reload() }
 
     func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) {
-        download.delegate = self
+        startedDownload(download)
     }
 
     func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
-        download.delegate = self
+        startedDownload(download)
     }
 
-    // MARK: WKDownloadDelegate — saves to ~/Downloads
-
-    func download(_ download: WKDownload, decideDestinationUsing response: URLResponse,
-                  suggestedFilename: String, completionHandler: @escaping (URL?) -> Void) {
-        let dir = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
-        let base = (suggestedFilename as NSString).deletingPathExtension
-        let ext = (suggestedFilename as NSString).pathExtension
-        var dest = dir.appendingPathComponent(suggestedFilename)
-        var i = 1
-        while FileManager.default.fileExists(atPath: dest.path) {
-            dest = dir.appendingPathComponent(ext.isEmpty ? "\(base) (\(i))" : "\(base) (\(i)).\(ext)")
-            i += 1
+    private func startedDownload(_ download: WKDownload) {
+        DownloadCenter.shared.track(download)
+        owner?.showDownloads(nil)
+        // A link that opened a new blank tab just to download a file: close that tab, like Chrome.
+        if webView.backForwardList.currentItem == nil, webView.url == nil || webView.url?.absoluteString == "about:blank",
+           let owner = owner, owner.tabs.count > 1 {
+            DispatchQueue.main.async { owner.closeTab(self) }
         }
-        completionHandler(dest)
-    }
-
-    func downloadDidFinish(_ download: WKDownload) {
-        NSApp.requestUserAttention(.informationalRequest)
     }
 
     // MARK: WKUIDelegate
@@ -844,6 +839,8 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate {
     private let reloadButton = HoverButton(symbol: "arrow.clockwise", tip: "Reload", target: nil, action: nil)
     private let homeButton = HoverButton(symbol: "house", tip: "Home", target: nil, action: nil)
     private let settingsButton = HoverButton(symbol: "gearshape", tip: "Settings", target: nil, action: nil)
+    private let downloadsButton = DownloadsButton(symbol: "arrow.down.circle", tip: "Downloads (⌥⌘L)", target: nil, action: nil)
+    private var downloadsPopover: NSPopover?
     private let addressField = AddressField()
     private let omnibox = OmniboxView()
     private let lockIcon = NSImageView()
@@ -864,9 +861,37 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate {
         window.delegate = self
         buildLayout(in: window)
         addTab(url: url, configuration: configuration, activate: true)
+        NotificationCenter.default.addObserver(self, selector: #selector(downloadsChanged),
+                                               name: .liteDownloadsChanged, object: nil)
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
+
+    deinit { NotificationCenter.default.removeObserver(self) }
+
+    // MARK: Downloads
+
+    @objc private func downloadsChanged() {
+        let center = DownloadCenter.shared
+        downloadsButton.isHidden = center.items.isEmpty
+        downloadsButton.active = center.hasActive
+        downloadsButton.fraction = center.activeFraction
+    }
+
+    /// Shows the downloads list under the toolbar button (⌥⌘L).
+    @objc func showDownloads(_ sender: Any?) {
+        downloadsButton.isHidden = false
+        if let p = downloadsPopover, p.isShown { if sender != nil { p.close() }; return }
+        guard window?.isVisible == true else { return }
+        let p = NSPopover()
+        p.contentViewController = DownloadsViewController()
+        p.behavior = .transient
+        downloadsPopover = p
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, self.downloadsButton.window != nil else { return }
+            p.show(relativeTo: self.downloadsButton.bounds, of: self.downloadsButton, preferredEdge: self.downloadsButton.isFlipped ? .maxY : .minY)
+        }
+    }
 
     // MARK: Layout
 
@@ -875,7 +900,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate {
 
         for (b, sel) in [(backButton, #selector(goBack(_:))), (forwardButton, #selector(goForward(_:))),
                          (reloadButton, #selector(reloadOrStop(_:))), (homeButton, #selector(goHome(_:))),
-                         (settingsButton, #selector(openSettings(_:)))] {
+                         (downloadsButton, #selector(showDownloads(_:))), (settingsButton, #selector(openSettings(_:)))] {
             b.target = self
             b.action = sel
             b.translatesAutoresizingMaskIntoConstraints = false
@@ -915,7 +940,8 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate {
             addressField.centerYAnchor.constraint(equalTo: omnibox.centerYAnchor),
         ])
 
-        let row = NSStackView(views: [backButton, forwardButton, reloadButton, homeButton, omnibox, settingsButton])
+        downloadsButton.isHidden = DownloadCenter.shared.items.isEmpty
+        let row = NSStackView(views: [backButton, forwardButton, reloadButton, homeButton, omnibox, downloadsButton, settingsButton])
         row.orientation = .horizontal
         row.spacing = 2
         row.setCustomSpacing(10, after: homeButton)

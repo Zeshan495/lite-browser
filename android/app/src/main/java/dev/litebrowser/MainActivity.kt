@@ -4,7 +4,14 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.DownloadManager
+import android.Manifest
 import android.content.ActivityNotFoundException
+import android.content.ContentValues
+import android.content.pm.PackageManager
+import android.provider.MediaStore
+import android.util.Base64
+import android.webkit.MimeTypeMap
+import java.io.File
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
@@ -63,6 +70,7 @@ class MainActivity : Activity() {
         var failedUrl: String? = null
         var errorToken: String? = null
         var retries = 0
+        var pendingBlob: String? = null      // file name we're waiting for from a blob:/data: download
         val shownUrl: String? get() = if (errorToken != null) failedUrl else webView.url
         val title: String
             get() = when {
@@ -252,7 +260,7 @@ class MainActivity : Activity() {
         wv.addJavascriptInterface(Bridge(tab), "LiteAndroid")
         wv.webViewClient = TabClient(tab)
         wv.webChromeClient = TabChrome(tab)
-        wv.setDownloadListener { dlUrl, ua, disposition, mime, _ -> download(dlUrl, ua, disposition, mime) }
+        wv.setDownloadListener { dlUrl, ua, disposition, mime, _ -> download(tab, dlUrl, ua, disposition, mime) }
 
         val index = current?.let { tabs.indexOf(it) + 1 } ?: tabs.size
         tabs.add(index.coerceIn(0, tabs.size), tab)
@@ -377,6 +385,19 @@ class MainActivity : Activity() {
         @JavascriptInterface
         fun post(json: String) {
             main.post { handleMessage(tab, json) }
+        }
+
+        /** Receives the bytes of a blob:/data: download (only when LiteBrowser asked for one). */
+        @JavascriptInterface
+        fun saveFile(mime: String, base64: String) {
+            main.post {
+                val name = tab.pendingBlob ?: return@post
+                tab.pendingBlob = null
+                if (base64.isEmpty()) { toast("Couldn't download this file"); return@post }
+                runCatching { Base64.decode(base64, Base64.DEFAULT) }
+                    .onSuccess { saveBytes(name, mime.ifBlank { "application/octet-stream" }, it) }
+                    .onFailure { toast("Couldn't download this file") }
+            }
         }
     }
 
@@ -615,21 +636,86 @@ class MainActivity : Activity() {
     // Downloads
     // -----------------------------------------------------------------------------------------
 
-    private fun download(url: String, userAgent: String, disposition: String?, mime: String?) {
+    private fun download(tab: Tab, url: String, userAgent: String, disposition: String?, mime: String?) {
+        var name = URLUtil.guessFileName(url, disposition, mime)
+        if (url.startsWith("blob:") || url.startsWith("data:")) {
+            // Files made by the page itself (converters, "export" buttons): read them from the page.
+            val ext = MimeTypeMap.getSingleton().getExtensionFromMimeType(mime ?: "")
+            if (name.endsWith(".bin") && ext != null) name = name.removeSuffix(".bin") + ".$ext"
+            tab.pendingBlob = name.replace("/", "_")
+            val js = """
+                (async () => {
+                  try {
+                    const b = await (await fetch(${JSONObject.quote(url)})).blob();
+                    const r = new FileReader();
+                    r.onload = () => LiteAndroid.saveFile(b.type || ${JSONObject.quote(mime ?: "")}, String(r.result).split(',')[1] || '');
+                    r.onerror = () => LiteAndroid.saveFile('', '');
+                    r.readAsDataURL(b);
+                  } catch (e) { LiteAndroid.saveFile('', ''); }
+                })();
+            """.trimIndent()
+            tab.webView.evaluateJavascript(js, null)
+            return
+        }
+        if (Build.VERSION.SDK_INT < 29 &&
+            checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+            pendingDownload = { download(tab, url, userAgent, disposition, mime) }
+            requestPermissions(arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), REQUEST_STORAGE)
+            return
+        }
         try {
-            val name = URLUtil.guessFileName(url, disposition, mime)
             val req = DownloadManager.Request(Uri.parse(url)).apply {
                 setMimeType(mime)
                 CookieManager.getInstance().getCookie(url)?.let { addRequestHeader("Cookie", it) }
                 addRequestHeader("User-Agent", userAgent)
+                tab.webView.url?.let { addRequestHeader("Referer", it) }
                 setTitle(name)
+                setDescription("LiteBrowser")
                 setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                 setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, name)
             }
             (getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager).enqueue(req)
-            toast("Downloading $name")
+            toast("Downloading $name. See your notifications.")
         } catch (e: Exception) {
             toast("Couldn't download: ${e.message}")
+        }
+    }
+
+    private var pendingDownload: (() -> Unit)? = null
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != REQUEST_STORAGE) return
+        val run = pendingDownload
+        pendingDownload = null
+        if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) run?.invoke()
+        else toast("LiteBrowser needs storage access to save downloads")
+    }
+
+    /** Saves bytes into the phone's Downloads folder. */
+    private fun saveBytes(name: String, mime: String, bytes: ByteArray) {
+        try {
+            if (Build.VERSION.SDK_INT >= 29) {
+                val values = ContentValues().apply {
+                    put(MediaStore.Downloads.DISPLAY_NAME, name)
+                    put(MediaStore.Downloads.MIME_TYPE, mime)
+                    put(MediaStore.Downloads.IS_PENDING, 1)
+                }
+                val uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                    ?: throw IllegalStateException("storage unavailable")
+                contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+                values.clear()
+                values.put(MediaStore.Downloads.IS_PENDING, 0)
+                contentResolver.update(uri, values, null, null)
+            } else {
+                @Suppress("DEPRECATION")
+                val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                dir.mkdirs()
+                File(dir, name).writeBytes(bytes)
+            }
+            toast("Saved $name to Downloads")
+        } catch (e: Exception) {
+            toast("Couldn't save $name: ${e.message}")
         }
     }
 
@@ -763,6 +849,7 @@ class MainActivity : Activity() {
 
     companion object {
         private const val REQUEST_FILE = 42
+        private const val REQUEST_STORAGE = 43
         private const val DESKTOP_UA =
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
     }
