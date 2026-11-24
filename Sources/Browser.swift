@@ -550,6 +550,7 @@ final class BrowserTab: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMe
         let first = NSFullUserName().split(separator: " ").first.map(String.init) ?? ""
         let state: [String: Any] = [
             "sites": HistoryStore.shared.topSites(limit: 8),
+            "recent": HistoryStore.shared.recentPages(limit: 5),
             "hidden": Array(Prefs.hiddenTopSites),
             "name": first,
             "version": AppInfo.version,

@@ -105,6 +105,21 @@ class HistoryStore(context: Context) {
         save()
     }
 
+    /** Latest distinct pages (no Google result pages), for the home page's "Recently visited". */
+    fun recent(limit: Int = 5): JSONArray {
+        val out = JSONArray()
+        val seen = HashSet<String>()
+        for (it in items) {
+            if (out.length() >= limit) break
+            val u = Uri.parse(it.url)
+            val host = u.host ?: continue
+            if (u.scheme != "http" && u.scheme != "https") continue
+            if (Web.googleQuery(it.url) != null || !seen.add(it.url)) continue
+            out.put(JSONObject().put("title", it.title).put("url", it.url).put("host", host).put("time", it.time))
+        }
+        return out
+    }
+
     /** Most-visited sites, with recent visits counting more (same formula as the Mac app). */
     fun topSites(limit: Int = 8): JSONArray {
         val hiddenNow = hidden
@@ -116,11 +131,11 @@ class HistoryStore(context: Context) {
             val scheme = u.scheme ?: continue
             if (scheme != "http" && scheme != "https") continue
             val raw = u.host?.lowercase() ?: continue
-            val host = raw.removePrefix("www.")
+            val host = raw.removePrefix("www.").removePrefix("m.").removePrefix("mobile.")
             if (host in hiddenNow || host == "accounts.google.com") continue
             val ageDays = (now - it.time) / 86_400_000.0
             score[host] = (score[host] ?: 0.0) + 1.0 / (1.0 + ageDays / 7.0)
-            if (host !in info) info[host] = "$scheme://$raw/" to it.title
+            if (host !in info) info[host] = "$scheme://$host/" to it.title
         }
         val out = JSONArray()
         score.entries.sortedByDescending { it.value }.take(limit).forEach { e ->

@@ -137,9 +137,7 @@ final class LockView: NSVisualEffectView, NSTextFieldDelegate {
             onWipe?()
             return
         }
-        let left = AppLock.maxFailures - AppLock.failures
-        message.stringValue = "Wrong PIN. \(left) more wrong attempt\(left == 1 ? "" : "s") will erase all browsing data."
-        shake()
+        shake()                                    // no message: just a shake
     }
 
     private func shake() {

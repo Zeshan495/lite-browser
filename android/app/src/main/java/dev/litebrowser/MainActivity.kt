@@ -243,8 +243,7 @@ class MainActivity : Activity() {
                 factoryReset()
                 return
             }
-            val left = AppLock.MAX_FAILURES - fails
-            message.text = "Wrong PIN. $left more wrong attempt${if (left == 1) "" else "s"} will erase all browsing data."
+            // no message: just a shake
             pin.animate().translationX(dp(12).toFloat()).setDuration(50).withEndAction {
                 pin.animate().translationX(-dp(12).toFloat()).setDuration(50).withEndAction {
                     pin.animate().translationX(0f).setDuration(50).start()
@@ -1008,6 +1007,7 @@ class MainActivity : Activity() {
         if (!Web.isHome(tab.webView.url)) return
         val state = JSONObject()
             .put("sites", history.topSites(8))
+            .put("recent", history.recent(5))
             .put("hidden", JSONArray(history.hidden.toList()))
             .put("name", "")
             .put("version", runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull() ?: "")

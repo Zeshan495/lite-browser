@@ -784,6 +784,20 @@ final class HistoryStore {
         save()
     }
 
+    /// Latest distinct pages (no Google result pages), for the home page's "Recently visited".
+    func recentPages(limit: Int) -> [[String: Any]] {
+        var seen = Set<String>()
+        var out: [[String: Any]] = []
+        for it in items {
+            if out.count >= limit { break }
+            guard !seen.contains(it.url), let u = URL(string: it.url), let host = u.host,
+                  ["http", "https"].contains(u.scheme ?? ""), HistoryStore.googleQuery(u) == nil else { continue }
+            seen.insert(it.url)
+            out.append(["title": it.title, "url": it.url, "host": host, "time": it.date.timeIntervalSince1970 * 1000])
+        }
+        return out
+    }
+
     /// Most-visited sites, weighted so recent visits count more. Used by the home page.
     func topSites(limit: Int) -> [[String: String]] {
         let hidden = Prefs.hiddenTopSites
@@ -794,11 +808,11 @@ final class HistoryStore {
             guard let u = URL(string: item.url), let rawHost = u.host?.lowercased(),
                   let scheme = u.scheme, ["http", "https"].contains(scheme) else { continue }
             var host = rawHost
-            if host.hasPrefix("www.") { host.removeFirst(4) }
+            for prefix in ["www.", "m.", "mobile."] where host.hasPrefix(prefix) { host.removeFirst(prefix.count); break }
             if hidden.contains(host) || host == "accounts.google.com" { continue }
             let ageDays = now.timeIntervalSince(item.date) / 86_400
             score[host, default: 0] += 1.0 / (1.0 + ageDays / 7.0)
-            if info[host] == nil { info[host] = ("\(scheme)://\(rawHost)/", item.title) }
+            if info[host] == nil { info[host] = ("\(scheme)://\(host)/", item.title) }
         }
         return score.sorted { $0.value > $1.value }.prefix(limit).compactMap { entry in
             guard let i = info[entry.key] else { return nil }

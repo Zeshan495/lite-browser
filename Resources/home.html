@@ -2,107 +2,143 @@
 <html>
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>New Tab</title>
 <style>
 :root{
   color-scheme:light dark;
-  --ink:#0f172a;--muted:#64748b;--glass:rgba(255,255,255,.62);--glass-strong:rgba(255,255,255,.86);
-  --line:rgba(15,23,42,.08);--shadow:0 10px 30px rgba(30,41,99,.12);
-  --a:#4338ca;--b:#0ea5e9;--c:#fbbf24;
-  --bg1:#eef2ff;--bg2:#e0f2fe;
+  --bg:#f7f8fa; --surface:#ffffff; --ink:#111827; --ink2:#374151; --muted:#6b7280; --faint:#9ca3af;
+  --line:#e5e7eb; --chip:#eef0f3; --chip-hover:#e4e7ec; --accent:#2563eb; --ring:rgba(37,99,235,.18);
+  --shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08);
+  --shadow-lg:0 4px 12px rgba(16,24,40,.08),0 1px 3px rgba(16,24,40,.06);
 }
 @media (prefers-color-scheme:dark){:root{
-  --ink:#e2e8f0;--muted:#94a3b8;--glass:rgba(30,32,48,.55);--glass-strong:rgba(36,39,58,.9);
-  --line:rgba(255,255,255,.08);--shadow:0 10px 30px rgba(0,0,0,.35);
-  --bg1:#0b1022;--bg2:#0c1a2b;
+  --bg:#1a1b1e; --surface:#24262b; --ink:#f3f4f6; --ink2:#d1d5db; --muted:#9ca3af; --faint:#6b7280;
+  --line:#33363d; --chip:#2b2e34; --chip-hover:#34373e; --accent:#60a5fa; --ring:rgba(96,165,250,.22);
+  --shadow:0 1px 2px rgba(0,0,0,.3); --shadow-lg:0 6px 16px rgba(0,0,0,.35);
 }}
 *{box-sizing:border-box}
-html,body{margin:0;height:100%}
+html,body{margin:0;min-height:100%}
 body{
-  font:15px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;color:var(--ink);
-  background:linear-gradient(160deg,var(--bg1),var(--bg2));min-height:100vh;overflow-x:hidden;
-  display:flex;flex-direction:column;align-items:center;-webkit-user-select:none;user-select:none;
+  font:14px/1.45 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,system-ui,sans-serif;
+  color:var(--ink);background:var(--bg);-webkit-font-smoothing:antialiased;
+  display:flex;flex-direction:column;align-items:center;min-height:100vh;-webkit-user-select:none;user-select:none;
 }
-.blob{position:fixed;border-radius:50%;filter:blur(70px);opacity:.55;z-index:0;pointer-events:none;animation:drift 22s ease-in-out infinite alternate}
-.blob.one{width:520px;height:520px;background:var(--a);top:-180px;left:-120px;opacity:.28}
-.blob.two{width:460px;height:460px;background:var(--b);bottom:-160px;right:-100px;opacity:.3;animation-delay:-8s}
-.blob.three{width:220px;height:220px;background:var(--c);top:42%;right:18%;opacity:.16;animation-delay:-14s}
-@keyframes drift{to{transform:translate(40px,30px) scale(1.08)}}
-@media (prefers-reduced-motion:reduce){.blob{animation:none}}
-.wrap{position:relative;z-index:1;width:min(760px,92vw);margin-top:max(9vh,48px);display:flex;flex-direction:column;align-items:center}
-.brand{display:flex;align-items:center;gap:10px;margin-bottom:26px;opacity:.95}
-.brand img{width:38px;height:38px;filter:drop-shadow(0 4px 10px rgba(67,56,202,.35))}
-.brand span{font-weight:700;font-size:18px;letter-spacing:-.01em}
-.brand span b{background:linear-gradient(90deg,var(--a),var(--b));-webkit-background-clip:text;background-clip:text;color:transparent}
-.clock{font-size:clamp(56px,9vw,84px);font-weight:200;letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums}
-.greet{font-size:20px;font-weight:500;margin:10px 0 4px}
-.date{color:var(--muted);font-size:14px;margin-bottom:30px}
-form{width:100%;position:relative}
+main{width:min(680px,100% - 40px);padding-top:clamp(56px,14vh,140px);flex:1}
+
+/* Brand */
+.brand{display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:28px}
+.brand img{width:44px;height:44px;border-radius:11px}
+.brand h1{margin:0;font-size:30px;font-weight:650;letter-spacing:-.02em}
+.brand h1 span{color:var(--accent)}
+
+/* Search */
+form{margin:0}
 .search{
-  width:100%;display:flex;align-items:center;gap:12px;padding:0 18px;height:58px;border-radius:29px;
-  background:var(--glass-strong);border:1px solid var(--line);box-shadow:var(--shadow);
-  -webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);transition:box-shadow .2s,transform .2s;
+  display:flex;align-items:center;gap:12px;height:52px;padding:0 18px;border-radius:26px;
+  background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);transition:box-shadow .15s,border-color .15s;
 }
-.search:focus-within{box-shadow:0 0 0 4px rgba(14,165,233,.25),var(--shadow);transform:translateY(-1px)}
-.search svg{flex:none;opacity:.55}
-.search input{flex:1;border:0;outline:0;background:transparent;font:inherit;font-size:17px;color:inherit;-webkit-user-select:text;user-select:text}
-.search input::placeholder{color:var(--muted)}
-.kbd{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:2px 7px}
-.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;width:100%;margin-top:36px}
-@media (max-width:620px){.tiles{grid-template-columns:repeat(3,1fr)}}
-.tile{
-  position:relative;display:flex;flex-direction:column;align-items:center;gap:10px;padding:18px 8px 14px;border-radius:18px;
-  background:var(--glass);border:1px solid var(--line);text-decoration:none;color:inherit;cursor:pointer;
-  -webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);transition:transform .18s,box-shadow .18s,background .18s;
+.search:hover{box-shadow:var(--shadow-lg)}
+.search:focus-within{border-color:var(--accent);box-shadow:0 0 0 4px var(--ring)}
+.search svg{flex:none;color:var(--muted)}
+.search input{flex:1;min-width:0;border:0;outline:0;background:transparent;color:var(--ink);font:inherit;font-size:16px;-webkit-user-select:text;user-select:text}
+.search input::placeholder{color:var(--faint)}
+.kbd{font-size:11px;color:var(--faint);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+
+/* Sections */
+section{margin-top:40px}
+.head{display:flex;align-items:baseline;justify-content:space-between;margin:0 4px 10px}
+.head h2{margin:0;font-size:13px;font-weight:600;color:var(--muted)}
+.link{background:none;border:0;padding:0;font:inherit;font-size:13px;color:var(--accent);cursor:pointer}
+.link:hover{text-decoration:underline}
+
+/* Shortcuts */
+.shortcuts{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.sc{position:relative;display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 4px 12px;border-radius:12px;text-decoration:none;color:var(--ink2);transition:background .12s}
+.sc:hover{background:var(--chip)}
+.sc .ic{width:52px;height:52px;border-radius:50%;background:var(--chip);display:grid;place-items:center;overflow:hidden;transition:background .12s}
+.sc:hover .ic{background:var(--surface);box-shadow:var(--shadow)}
+.sc .ic img{width:26px;height:26px}
+.sc .ic.letter{color:#fff;font-weight:600;font-size:20px}
+.sc .nm{font-size:12.5px;max-width:100%;padding:0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sc .x{position:absolute;top:4px;right:10px;width:20px;height:20px;border-radius:50%;border:0;background:var(--surface);color:var(--muted);box-shadow:var(--shadow);font-size:12px;line-height:20px;cursor:pointer;opacity:0;transition:opacity .12s}
+.sc:hover .x{opacity:1}
+.sc .x:hover{color:#dc2626}
+
+/* Recently visited */
+.recent{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:var(--shadow)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 14px;text-decoration:none;color:inherit;border-top:1px solid var(--line)}
+.row:first-child{border-top:0}
+.row:hover{background:var(--chip)}
+.row .fav{width:20px;height:20px;flex:none;border-radius:5px;display:grid;place-items:center;overflow:hidden}
+.row .fav img{width:18px;height:18px}
+.row .fav.letter{color:#fff;font-size:11px;font-weight:700}
+.row .t{flex:1;min-width:0}
+.row .t b{display:block;font-weight:500;font-size:14px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .t small{display:block;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .when{font-size:12px;color:var(--faint);flex:none}
+.empty{padding:22px;text-align:center;color:var(--muted);font-size:13px}
+
+/* Footer */
+footer{width:min(680px,100% - 40px);padding:40px 0 24px;display:flex;flex-direction:column;align-items:center;gap:10px}
+footer nav{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 18px}
+footer nav button{background:none;border:0;padding:4px 0;font:inherit;font-size:13px;color:var(--muted);cursor:pointer}
+footer nav button:hover{color:var(--ink)}
+footer .meta{font-size:12px;color:var(--faint);text-align:center}
+
+/* Phones */
+@media (max-width:560px){
+  main{width:calc(100% - 28px);padding-top:28px}
+  .brand{margin-bottom:20px}
+  .brand img{width:36px;height:36px;border-radius:9px}
+  .brand h1{font-size:24px}
+  .search{height:50px}
+  .kbd{display:none}
+  section{margin-top:30px}
+  .shortcuts{gap:2px}
+  .sc{padding:10px 2px}
+  .sc .ic{width:50px;height:50px}
+  .sc .nm{font-size:12px}
+  .sc .x{display:none}
+  .row{padding:12px 14px}
+  .row .when{display:none}
+  footer{width:calc(100% - 28px);padding:30px 0 18px}
+  footer nav{gap:2px 16px}
 }
-.tile:hover{transform:translateY(-3px);box-shadow:var(--shadow);background:var(--glass-strong)}
-.tile:active{transform:translateY(-1px) scale(.98)}
-.icon{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.08);overflow:hidden}
-.icon img{width:30px;height:30px}
-.icon.letter{color:#fff;font-weight:700;font-size:21px}
-.name{font-size:13px;font-weight:500;max-width:100%;padding:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.x{position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;border:0;background:var(--line);color:var(--muted);
-   font-size:14px;line-height:22px;cursor:pointer;opacity:0;transition:opacity .15s}
-.tile:hover .x{opacity:1}
-.x:hover{background:#ef4444;color:#fff}
-.section-title{width:100%;display:flex;justify-content:space-between;align-items:center;margin-top:34px;color:var(--muted);font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
-.section-title + .tiles{margin-top:12px}
-.link{background:none;border:0;color:var(--muted);font:inherit;font-size:12px;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500}
-.link:hover{color:var(--ink)}
-footer{position:relative;z-index:1;margin-top:auto;padding:28px 0 22px;display:flex;gap:18px;color:var(--muted);font-size:12.5px}
-footer button{background:none;border:0;color:inherit;font:inherit;cursor:pointer;display:flex;gap:6px;align-items:center}
-footer button:hover{color:var(--ink)}
+@media (hover:none){ .sc .x{display:none} .sc:hover{background:none} .sc:hover .ic{background:var(--chip);box-shadow:none} }
 </style>
 </head>
 <body>
-<div class="blob one"></div><div class="blob two"></div><div class="blob three"></div>
-
-<div class="wrap">
-  <div class="brand"><img src="AppIcon.png" alt=""><span>Lite<b>Browser</b></span></div>
-  <div class="clock" id="clock">--:--</div>
-  <div class="greet" id="greet">Hello</div>
-  <div class="date" id="date"></div>
+<main>
+  <div class="brand"><img src="AppIcon.png" alt=""><h1>Lite<span>Browser</span></h1></div>
 
   <form id="form" autocomplete="off">
     <label class="search">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input id="q" placeholder="Search Google or type a URL" spellcheck="false" autocomplete="off">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" placeholder="Search Google or type a URL" spellcheck="false" autocomplete="off" enterkeyhint="go">
       <span class="kbd">/</span>
     </label>
   </form>
 
-  <div class="section-title"><span id="sitesTitle">Top sites</span><button class="link" id="restore" hidden>Show removed sites</button></div>
-  <div class="tiles" id="tiles"></div>
-</div>
+  <section>
+    <div class="head"><h2 id="scTitle">Shortcuts</h2><button class="link" id="restore" hidden>Restore removed</button></div>
+    <div class="shortcuts" id="shortcuts"></div>
+  </section>
+
+  <section id="recentSection" hidden>
+    <div class="head"><h2>Recently visited</h2><button class="link" data-settings="history">See all history</button></div>
+    <div class="recent" id="recent"></div>
+  </section>
+</main>
 
 <footer>
-  <button data-settings="history">🕘 History</button>
-  <button data-settings="privacy">🧹 Clear data</button>
-  <button data-settings="dns">🌐 DNS</button>
-  <button data-settings="downloads">⬇️ Downloads</button>
-  <span>🔒 Your history stays on this device</span>
-  <span id="ver"></span>
+  <nav>
+    <button data-settings="history">History</button>
+    <button data-settings="downloads">Downloads</button>
+    <button data-settings="privacy">Clear browsing data</button>
+    <button data-settings="dns">DNS</button>
+  </nav>
+  <div class="meta"><span id="ver">LiteBrowser</span> · Your history stays on this device</div>
 </footer>
 
 <script>
@@ -115,18 +151,7 @@ const post = msg => {
 };
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-// ---- clock & greeting
-let userName = '';
-function tick() {
-  const now = new Date(), h = now.getHours();
-  $('#clock').textContent = now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }).replace(/\s?[AP]M$/i, '');
-  const part = h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : h < 22 ? 'Good evening' : 'Good night';
-  $('#greet').textContent = userName ? `${part}, ${userName}` : part;
-  $('#date').textContent = now.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
-}
-tick(); setInterval(tick, 1000 * 15);
-
-// ---- search (same rules as the address bar)
+// ---- Search (same rules as the address bar)
 function toURL(text) {
   const t = text.trim();
   if (!t) return null;
@@ -145,13 +170,14 @@ document.addEventListener('keydown', e => {
   if (e.key === '/' && document.activeElement !== $('#q')) { e.preventDefault(); $('#q').focus(); }
 });
 
-// ---- top sites
+// ---- Names, icons
 const FRIENDLY = {
   'google.com': 'Google', 'youtube.com': 'YouTube', 'mail.google.com': 'Gmail', 'github.com': 'GitHub',
-  'wikipedia.org': 'Wikipedia', 'en.wikipedia.org': 'Wikipedia', 'x.com': 'X', 'facebook.com': 'Facebook',
+  'wikipedia.org': 'Wikipedia', 'en.wikipedia.org': 'Wikipedia', 'x.com': 'X', 'twitter.com': 'X', 'facebook.com': 'Facebook',
   'instagram.com': 'Instagram', 'linkedin.com': 'LinkedIn', 'web.whatsapp.com': 'WhatsApp', 'chatgpt.com': 'ChatGPT',
   'claude.ai': 'Claude', 'maps.google.com': 'Maps', 'drive.google.com': 'Drive', 'netflix.com': 'Netflix',
   'reddit.com': 'Reddit', 'stackoverflow.com': 'Stack Overflow', 'amazon.com': 'Amazon', 'daraz.pk': 'Daraz',
+  'news.ycombinator.com': 'Hacker News', 'docs.google.com': 'Docs',
 };
 const DEFAULTS = [
   { host: 'google.com', url: 'https://www.google.com/' },
@@ -163,26 +189,17 @@ const DEFAULTS = [
   { host: 'web.whatsapp.com', url: 'https://web.whatsapp.com/' },
   { host: 'drive.google.com', url: 'https://drive.google.com/' },
 ];
-const COLORS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
+const COLORS = ['#4f46e5', '#0891b2', '#059669', '#d97706', '#dc2626', '#7c3aed', '#db2777', '#0d9488'];
+const colorFor = h => COLORS[[...h].reduce((a, c) => a + c.charCodeAt(0), 0) % COLORS.length];
 
 function friendly(host) {
+  host = host.replace(/^(www|m|mobile)\./, '');
   if (FRIENDLY[host]) return FRIENDLY[host];
   const parts = host.split('.');
   const core = parts.length > 2 && parts[parts.length - 2].length <= 3 ? parts[parts.length - 3] : parts[parts.length - 2] || host;
   return core.charAt(0).toUpperCase() + core.slice(1);
 }
-
-function tileHTML(s, i, removable) {
-  const name = friendly(s.host);
-  const color = COLORS[[...s.host].reduce((a, c) => a + c.charCodeAt(0), 0) % COLORS.length];
-  return `<a class="tile" href="${esc(s.url)}" title="${esc(s.title || s.host)}">
-      <div class="icon" data-letter="${esc(name.charAt(0))}" data-color="${color}">
-        <img src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(s.host)}&sz=64" alt="" onerror="fallback(this)">
-      </div>
-      <div class="name">${esc(name)}</div>
-      ${removable ? `<button class="x" title="Remove from top sites" data-remove="${esc(s.host)}">×</button>` : ''}
-    </a>`;
-}
+const favicon = (host, size) => `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=${size}`;
 
 function fallback(img) {
   const box = img.parentElement;
@@ -191,19 +208,57 @@ function fallback(img) {
   box.textContent = box.dataset.letter;
 }
 
+function shortcutHTML(s, removable) {
+  const name = friendly(s.host);
+  return `<a class="sc" href="${esc(s.url)}" title="${esc(s.title || name)}" data-host="${esc(s.host)}" ${removable ? 'data-removable="1"' : ''}>
+      <div class="ic" data-letter="${esc(name.charAt(0))}" data-color="${colorFor(s.host)}"><img src="${favicon(s.host, 64)}" alt="" onerror="fallback(this)"></div>
+      <div class="nm">${esc(name)}</div>
+      ${removable ? `<button class="x" title="Remove" data-remove="${esc(s.host)}">✕</button>` : ''}
+    </a>`;
+}
+
+function ago(ms) {
+  const m = Math.round((Date.now() - ms) / 60000);
+  if (m < 1) return 'Just now';
+  if (m < 60) return m + ' min ago';
+  const h = Math.round(m / 60);
+  if (h < 24) return h + ' h ago';
+  const d = Math.round(h / 24);
+  return d === 1 ? 'Yesterday' : d + ' days ago';
+}
+
+function recentHTML(r) {
+  const host = r.host.replace(/^www\./, '');
+  return `<a class="row" href="${esc(r.url)}">
+      <div class="fav" data-letter="${esc(friendly(host).charAt(0))}" data-color="${colorFor(host)}"><img src="${favicon(host, 32)}" alt="" onerror="fallback(this)"></div>
+      <div class="t"><b>${esc(r.title || friendly(host))}</b><small>${esc(host)}</small></div>
+      <div class="when">${ago(r.time)}</div>
+    </a>`;
+}
+
+// ---- Render (called by the app with your top sites and recent pages)
 function renderHome(state) {
-  userName = state.name || '';
   if (state.version) $('#ver').textContent = 'LiteBrowser ' + state.version;
-  tick();
   const real = (state.sites || []).slice(0, 8);
   const seen = new Set(real.map(s => s.host));
   const fill = real.length < 8
     ? DEFAULTS.filter(d => !seen.has(d.host) && !(state.hidden || []).includes(d.host)).slice(0, 8 - real.length)
     : [];
-  $('#sitesTitle').textContent = real.length ? 'Top sites' : 'Get started';
-  $('#tiles').innerHTML = real.map((s, i) => tileHTML(s, i, true)).join('') + fill.map((s, i) => tileHTML(s, i, false)).join('');
+  $('#shortcuts').innerHTML = real.map(s => shortcutHTML(s, true)).join('') + fill.map(s => shortcutHTML(s, false)).join('');
   $('#restore').hidden = !(state.hidden && state.hidden.length);
+
+  const recent = (state.recent || []).slice(0, 5);
+  $('#recentSection').hidden = recent.length === 0;
+  $('#recent').innerHTML = recent.map(recentHTML).join('');
 }
+
+// Long-press (phones) or right-click (Mac) a shortcut to remove it
+document.addEventListener('contextmenu', e => {
+  const sc = e.target.closest('.sc');
+  if (!sc || !sc.dataset.removable) return;
+  e.preventDefault();
+  if (confirm(`Remove ${friendly(sc.dataset.host)} from shortcuts?`)) post({ action: 'remove', host: sc.dataset.host });
+});
 
 document.addEventListener('click', e => {
   const rm = e.target.closest('[data-remove]');
